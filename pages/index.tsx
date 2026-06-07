@@ -5,7 +5,7 @@ import WishlistCard from '@components/WishlistCard';
 const MOCK_ITEMS = Array.from({ length: 12 }, (_, i) => ({
   id: i + 1,
   title: `Wishlist item ${i + 1}`,
-  price: Math.floor(Math.random() * 200) + 10,
+  price: ((i * 37) % 200) + 10,
   category: ['Tech', 'Books', 'Fashion', 'Home'][i % 4],
 }));
 

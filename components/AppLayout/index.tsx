@@ -1,6 +1,6 @@
-import { AppShell } from '@mantine/core';
-import type { ReactNode } from 'react';
-import AppBar from '@components/AppBar';
+import { AppShell, AppShellHeader, AppShellMain } from "@mantine/core";
+import type { ReactNode } from "react";
+import AppBar from "@components/AppBar";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -9,12 +9,10 @@ interface AppLayoutProps {
 export default function AppLayout({ children }: AppLayoutProps) {
   return (
     <AppShell header={{ height: 60 }} padding="md">
-      <AppShell.Header>
+      <AppShellHeader>
         <AppBar />
-      </AppShell.Header>
-      <AppShell.Main>
-        {children}
-      </AppShell.Main>
+      </AppShellHeader>
+      <AppShellMain>{children}</AppShellMain>
     </AppShell>
   );
 }

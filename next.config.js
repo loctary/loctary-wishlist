@@ -1,3 +1,7 @@
+// @module-federation/nextjs-mf v8 requires the locally-installed webpack
+// (rather than Next's vendored copy) so the federation runtime can be patched.
+process.env.NEXT_PRIVATE_LOCAL_WEBPACK = 'true';
+
 const { NextFederationPlugin } = require('@module-federation/nextjs-mf');
 
 /** @type {import('next').NextConfig} */
@@ -6,7 +10,14 @@ const nextConfig = {
 
   serverExternalPackages: ['@mantine/core', '@mantine/hooks', '@mantine/notifications', '@mantine/form'],
 
-  webpack(config, { isServer }) {
+  webpack(config, { isServer, nextRuntime }) {
+    // The Edge runtime (middleware) must not be touched by Module Federation
+    // or react externalization — `react` cannot be resolved there as a
+    // commonjs external, which crashes middleware with "Native module not found".
+    if (nextRuntime === 'edge') {
+      return config;
+    }
+
     const pkg = require('./package.json');
 
     const mantineShared = isServer ? {} : {

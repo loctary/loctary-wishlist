@@ -10,10 +10,10 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@mantine/core": "^9.2.2",
-    "@mantine/form": "^9.2.2",
-    "@mantine/hooks": "^9.2.2",
-    "@mantine/notifications": "^9.2.2",
+    "@mantine/core": "9.3.0",
+    "@mantine/form": "9.3.0",
+    "@mantine/hooks": "9.3.0",
+    "@mantine/notifications": "9.3.0",
     "@module-federation/nextjs-mf": "^8.8.67",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.106.2",
@@ -30,5 +30,8 @@
     "postcss-simple-vars": "^7.0.1",
     "typescript": "^6.0.3",
     "webpack": "^5.107.2"
+  },
+  "overrides": {
+    "enhanced-resolve": "5.18.4"
   }
 }
