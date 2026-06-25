@@ -19,6 +19,9 @@ export interface AuthUser {
 
 export type AuthRoutes = Partial<Record<AuthRoute, string>>;
 
+/** Everything the remote can mount as a single-page slot via `./mountPage`. */
+export type AuthMountKey = AuthRoute | "profile";
+
 export interface AuthMountProps {
   apiUrl?: string;
   initialRoute?: AuthRoute;
@@ -29,5 +32,13 @@ export interface AuthMountProps {
   onNavigate?: (to: string, route: AuthRoute, params?: { email?: string }) => void;
 }
 
-/** The signature of `loctary_auth/mount`'s default export. */
+/** Props for the single-page mount (`loctary_auth/mountPage`). */
+export interface AuthPageMountProps extends AuthMountProps {
+  page: AuthMountKey;
+}
+
+/** The signature of `loctary_auth/mount`'s default export (self-routing AuthApp). */
 export type AuthMountFn = (el: HTMLElement, props: AuthMountProps) => () => void;
+
+/** The signature of `loctary_auth/mountPage`'s default export (one page). */
+export type AuthPageMountFn = (el: HTMLElement, props: AuthPageMountProps) => () => void;

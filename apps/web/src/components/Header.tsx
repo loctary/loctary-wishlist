@@ -1,13 +1,22 @@
 import {
   ActionIcon,
+  Avatar,
   Box,
   Button,
   Group,
+  Menu,
   Text,
   Title,
   useMantineColorScheme,
 } from "@mantine/core";
-import { IconGift, IconMoon, IconSun } from "@tabler/icons-react";
+import {
+  IconGift,
+  IconLogout,
+  IconMoon,
+  IconSettings,
+  IconSun,
+  IconUserCircle,
+} from "@tabler/icons-react";
 import { Link, useRouter } from "@tanstack/react-router";
 import { useSession, useLogout } from "../lib/session";
 
@@ -21,6 +30,8 @@ export function AppHeader() {
     await logout();
     router.navigate({ to: "/" });
   };
+
+  const initial = (session?.email ?? "?").slice(0, 1).toUpperCase();
 
   return (
     <Box
@@ -50,19 +61,41 @@ export function AppHeader() {
           </ActionIcon>
 
           {isLoading ? null : session ? (
-            <>
-              {session.role === "admin" && (
-                <Button variant="light" size="sm" onClick={() => router.navigate({ to: "/admin" })}>
-                  Admin
-                </Button>
-              )}
-              <Text size="sm" c="dimmed" visibleFrom="sm">
-                {session.email}
-              </Text>
-              <Button variant="default" size="sm" onClick={onLogout}>
-                Log out
-              </Button>
-            </>
+            <Menu position="bottom-end" withArrow shadow="md" width={220}>
+              <Menu.Target>
+                <ActionIcon variant="default" radius="xl" size="lg" aria-label="Account menu">
+                  <Avatar size="sm" radius="xl" color="brand">
+                    {initial}
+                  </Avatar>
+                </ActionIcon>
+              </Menu.Target>
+
+              <Menu.Dropdown>
+                <Menu.Label>
+                  <Text size="xs" truncate>
+                    {session.email}
+                  </Text>
+                </Menu.Label>
+                <Menu.Item
+                  leftSection={<IconUserCircle size={16} />}
+                  onClick={() => router.navigate({ to: "/profile" })}
+                >
+                  Profile
+                </Menu.Item>
+                {session.role === "admin" && (
+                  <Menu.Item
+                    leftSection={<IconSettings size={16} />}
+                    onClick={() => router.navigate({ to: "/admin" })}
+                  >
+                    Admin
+                  </Menu.Item>
+                )}
+                <Menu.Divider />
+                <Menu.Item color="red" leftSection={<IconLogout size={16} />} onClick={onLogout}>
+                  Log out
+                </Menu.Item>
+              </Menu.Dropdown>
+            </Menu>
           ) : (
             <Button size="sm" onClick={() => router.navigate({ to: "/login" })}>
               Log in

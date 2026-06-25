@@ -1,4 +1,4 @@
-import type { AuthMountFn } from "./authTypes";
+import type { AuthPageMountFn } from "./authTypes";
 
 /**
  * Loads loctary-auth's federated `./mount` entry — client-only.
@@ -42,17 +42,26 @@ async function getContainer(): Promise<MfContainer> {
   return containerPromise;
 }
 
-/** Load the auth widget's imperative mount function (client-only). */
-export async function loadAuthMount(): Promise<AuthMountFn> {
+/** Resolve a federated module's default export (handles factory vs. value). */
+async function loadDefault<T>(name: string): Promise<T> {
   if (typeof window === "undefined") {
-    throw new Error("loadAuthMount must run in the browser");
+    throw new Error("auth remote modules can only load in the browser");
   }
   const container = await getContainer();
-  const factory = await container.get("./mount");
+  const factory = await container.get(name);
   const mod = (typeof factory === "function" ? await (factory as () => unknown)() : factory) as
-    | { default?: AuthMountFn }
-    | AuthMountFn;
-  const mount = (typeof mod === "function" ? mod : mod?.default) as AuthMountFn | undefined;
-  if (!mount) throw new Error("Could not load the auth widget mount");
-  return mount;
+    | { default?: T }
+    | T;
+  const value = (typeof mod === "function" ? mod : (mod as { default?: T })?.default) as T | undefined;
+  if (!value) throw new Error(`Could not load auth remote module "${name}"`);
+  return value;
+}
+
+/**
+ * Load the auth remote's single-page mount (`./mountPage`) — client-only. Each
+ * host auth route mounts just its own page with this; inter-page links are wired
+ * to the host router so the URL reflects the current screen.
+ */
+export function loadAuthPageMount(): Promise<AuthPageMountFn> {
+  return loadDefault<AuthPageMountFn>("./mountPage");
 }
