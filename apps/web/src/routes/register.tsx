@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AuthScreen } from "../components/AuthScreen";
+import { validateAuthSearch } from "../lib/authNav";
 
 export const Route = createFileRoute("/register")({
-  component: () => <AuthScreen initialRoute="register" />,
+  validateSearch: validateAuthSearch,
+  component: () => <AuthScreen page="register" />,
 });

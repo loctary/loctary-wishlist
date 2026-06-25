@@ -17,18 +17,22 @@ dynamic `import()` (which parses ESM) and drives the MF container contract
 
 The remote bundles its own React, so we **cannot** render its exposed page
 *components* in our React tree (dual-React → "invalid hook call"). Instead we use
-loctary-auth's imperative **`./mount`** entry and call `mount(el, props)` into a
-div (`src/components/RemoteAuthPage.tsx`). It runs in the browser only (inside
-`useEffect`), so nothing federated executes during SSR.
+loctary-auth's imperative **`./mountPage`** entry and call `mount(el, { page, … })`
+into a div (`src/components/RemoteAuthPage.tsx`). It runs in the browser only
+(inside `useEffect`), so nothing federated executes during SSR.
 
 > Cross-origin: native module import is CORS-gated. Auth's dev server sets
 > `cors: true`; in prod auth's **static assets** (remoteEntry.js + /assets/*) must
 > send `Access-Control-Allow-Origin` for `wishlist.loctary.com`.
 
-`AuthApp` (what `mount` renders) self-routes between login/register/verify/…, so
-we pass only `onAuthenticated` (refresh session → go home) and omit `onNavigate`
-— keeping the whole flow in one mount avoids a host-route remount that would drop
-the in-progress email.
+**One page per route.** Each auth screen is its OWN host route mounting just its
+own page (`page`: `login` | `register` | … | `profile`) — not the whole
+self-routing `AuthApp`. Links between screens are wired back to the host router:
+we pass `routes` (= `AUTH_PATHS` in `src/lib/authNav.ts`, so the remote builds
+correct `<a href>`s) and an `onNavigate` that does `router.navigate({ to, search })`,
+carrying the in-progress `email` in the route's `?email=` search param (each auth
+route's `validateSearch`). On success `onAuthenticated` refreshes the session and
+goes home.
 
 ## Session & roles
 
@@ -38,8 +42,14 @@ the `role` (gates admin UI). `useSession()` is a React Query hook; `useLogout()`
 calls auth's `POST /auth/logout` (auth owns the cookie) then invalidates.
 
 Session is resolved **client-side** (the HttpOnly cookie isn't available to SSR
-fetches from this app). Auth-route guards (`AuthScreen`) and admin gating are
-client-side; the backend re-enforces all authorization regardless.
+fetches from this app). The two guards are mirror images, both client-side (the
+backend re-enforces all authorization regardless): `AuthScreen` wraps the auth
+pages "only when logged **out**" (logged-in → home); `ProfileScreen` wraps
+`/profile` "only when logged **in**" (anonymous → /login).
+
+The header (`src/components/Header.tsx`) reflects session: a **Log in** button
+when logged out, or a user-avatar `Menu` (Profile / Admin if admin / Log out)
+when logged in.
 
 ## Routes (`src/routes/`)
 
@@ -47,8 +57,12 @@ client-side; the backend re-enforces all authorization regardless.
 | ----- | ---- |
 | `/` | public wishlist of `WISHLIST_OWNER_ID`, infinite scroll (`useInfiniteQuery` → `/wishlist/items`) |
 | `/items/$id` | public single item |
-| `/login` `/register` `/forgot-password` `/reset-password` `/verify-email` | embedded auth widget via `AuthScreen` (redirects home if already logged in) |
+| `/login` `/register` `/forgot-password` `/reset-password` `/verify-email` | one embedded auth page each via `AuthScreen page=…` (redirects home if already logged in) |
+| `/profile` | embedded read-only profile via `ProfileScreen` (redirects to /login if logged out) |
 | `/admin` | create/edit/delete + confirm/decline; sees the reserver. Admin-only |
+
+The app shell (`__root.tsx`) is a full-height flex column (header + `flex:1`
+`main`), so short pages (auth, profile) center in the viewport.
 
 ## Data layer
 

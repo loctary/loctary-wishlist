@@ -6,12 +6,12 @@ import { RemoteAuthPage } from "./RemoteAuthPage";
 import type { AuthRoute } from "../lib/authTypes";
 
 /**
- * Wraps an embedded auth screen with the "only when logged out" guard. Logged-in
+ * Wraps an embedded auth page with the "only when logged out" guard. Logged-in
  * users are bounced home. The check is client-side (the session cookie isn't
- * available to SSR fetches here); the embedded widget only mounts in the
- * browser anyway.
+ * available to SSR fetches here); the embedded page only mounts in the browser
+ * anyway.
  */
-export function AuthScreen({ initialRoute }: { initialRoute: AuthRoute }) {
+export function AuthScreen({ page }: { page: AuthRoute }) {
   const { data: session, isLoading } = useSession();
   const router = useRouter();
 
@@ -21,11 +21,11 @@ export function AuthScreen({ initialRoute }: { initialRoute: AuthRoute }) {
 
   if (isLoading || session) {
     return (
-      <Center mih="60vh">
+      <Center style={{ flex: 1 }}>
         <Loader />
       </Center>
     );
   }
 
-  return <RemoteAuthPage initialRoute={initialRoute} />;
+  return <RemoteAuthPage page={page} />;
 }

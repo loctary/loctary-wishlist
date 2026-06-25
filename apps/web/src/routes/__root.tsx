@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-router";
 import { QueryClientProvider, type QueryClient } from "@tanstack/react-query";
 import {
+  Box,
   ColorSchemeScript,
   MantineProvider,
   mantineHtmlProps,
@@ -57,8 +58,17 @@ function RootComponent() {
             colorSchemeManager={colorSchemeManager}
           >
             <Notifications />
-            <AppHeader />
-            <Outlet />
+            {/* Full-height app shell: header on top, content fills the rest of
+                the viewport so short pages (auth, profile) center vertically. */}
+            <Box style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
+              <AppHeader />
+              <Box
+                component="main"
+                style={{ flex: 1, display: "flex", flexDirection: "column" }}
+              >
+                <Outlet />
+              </Box>
+            </Box>
           </MantineProvider>
         </QueryClientProvider>
         <Scripts />
