@@ -1,0 +1,76 @@
+# @loctary/wishlist-server
+
+A **stateless Hono backend** for the wishlist. It owns the Supabase keys and the
+wishlist data, and it **verifies** the session cookie loctary-auth set — it never
+sees a password. Runs on **:3003** (`pnpm dev:server`) and deploys to a
+Cloudflare Worker (`api.wishlist.loctary.com`).
+
+## How auth works here
+
+There is no login flow in this app. loctary-auth set two HttpOnly cookies on the
+shared `COOKIE_DOMAIN` (`loctary_access_token`, `loctary_refresh_token`).
+`src/auth.ts` reads the access token, verifies it with Supabase
+(`anon().auth.getUser`), and — like auth's `/me` — silently refreshes via the
+refresh token when the access token has expired (this Worker is on the same
+cookie domain, so it may re-set them). The user's role comes from `profiles`.
+
+- `loadSession` — always-on; stashes `{ id, email, role } | null` on the context.
+- `requireUser` — 401 if no session.
+- `requireAdmin` — 403 if `role !== 'admin'`.
+
+`src/cookies.ts` **must** keep the same cookie names/policy as loctary-auth.
+
+## Files
+
+| File                    | Role                                                              |
+| ----------------------- | ---------------------------------------------------------------- |
+| `src/index.ts`          | Node entry (`@hono/node-server`): logger, CORS, `/health`, mounts `/wishlist`. |
+| `src/worker.ts`         | Cloudflare entry: same app, bridges Worker bindings → `process.env`. |
+| `src/env.ts`            | Lazy, memoised config. Import `env`/`getEnv()`, never `process.env`. Adds `WISHLIST_OWNER_ID`. |
+| `src/supabase.ts`       | `anon()` (verify/refresh tokens) and `admin()` (service-role; all data + role lookup). |
+| `src/cookies.ts`        | Read/set/clear the session cookies. Names must match loctary-auth. |
+| `src/auth.ts`           | Session verification + `requireUser` / `requireAdmin` guards.     |
+| `src/routes/wishlist.ts`| All endpoints. Zod-validated, `fail()` error contract.            |
+
+## Endpoints (under `/wishlist`)
+
+| Method | Path                       | Guard        | Notes |
+| ------ | -------------------------- | ------------ | ----- |
+| GET    | `/items?owner=&cursor=&limit=` | public   | infinite list; keyset cursor over `(position, created_at, id)`; default owner = `WISHLIST_OWNER_ID`. `publicItem()` hides the reserver. |
+| GET    | `/items/:id`               | public       | single item (`publicItem()`) |
+| GET    | `/me/reservations`         | requireUser  | the caller's own reservations |
+| POST   | `/items/:id/reserve`       | requireUser  | available → reserved; 409 if taken; idempotent for the same user |
+| DELETE | `/items/:id/reserve`       | requireUser  | cancel own reservation (only while `reserved`) → available |
+| GET    | `/admin/items`             | requireAdmin | full list incl. reserver email/name |
+| POST   | `/admin/items`             | requireAdmin | create (owner = caller) |
+| PATCH  | `/admin/items/:id`         | requireAdmin | edit |
+| DELETE | `/admin/items/:id`         | requireAdmin | delete |
+| POST   | `/admin/items/:id/confirm` | requireAdmin | reserved → confirmed (gift presented) |
+| POST   | `/admin/items/:id/decline` | requireAdmin | reserved → available (release) |
+
+## Error contract
+
+Uniform JSON via `fail()`: `{ "error": "human message", "fields"?: { field: msg } }`.
+`error` is always present (the client shows it in a notification); `fields` routes
+zod validation messages to specific inputs.
+
+## Reserve privacy
+
+`publicItem()` exposes only `status` (`available` / `reserved` / `confirmed`),
+never `reserved_by` / `reserved_at`. Only `/admin/*` and the caller's own
+`/me/reservations` reveal the reserver. This is the whole point — browsers see an
+item is taken (no double-buying) without learning who took it.
+
+## Data access & RLS
+
+All queries use `admin()` (service-role), which bypasses RLS; authorization is
+done in middleware. RLS is enabled in the migration with no policies as
+defense-in-depth (no direct anon/authenticated access). See
+[../../supabase/migrations/0001_wishlist.sql](../../supabase/migrations/0001_wishlist.sql).
+
+## Env
+
+See root [.env.example](../../.env.example). Required: `SUPABASE_URL`,
+`SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `WISHLIST_OWNER_ID`. Optional:
+`PORT` (3003), `COOKIE_DOMAIN`, `CORS_ALLOWED_ORIGINS`, `NODE_ENV`. Missing
+required vars throw at boot.

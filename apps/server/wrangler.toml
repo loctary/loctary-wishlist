@@ -1,0 +1,30 @@
+# Cloudflare Worker: the wishlist API (api.wishlist.loctary.com).
+#
+# Deploy from this directory:  npx wrangler deploy
+# Validate without deploying:  npx wrangler deploy --dry-run
+
+name = "loctary-wishlist-api"
+main = "src/worker.ts"
+compatibility_date = "2025-06-25"
+compatibility_flags = ["nodejs_compat"]
+
+# Custom Domain — the loctary.com zone is on Cloudflare, so wrangler creates the
+# DNS record + certificate automatically on deploy. Requires NO pre-existing
+# `api.wishlist` record (delete one first if it exists).
+[[routes]]
+pattern = "api.wishlist.loctary.com"
+custom_domain = true
+
+# Non-secret runtime vars. Secrets (SUPABASE_*) are NOT here — set them as
+# encrypted Worker secrets:
+#   wrangler secret put SUPABASE_URL
+#   wrangler secret put SUPABASE_ANON_KEY
+#   wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+[vars]
+NODE_ENV = "production"
+# Must match loctary-auth's COOKIE_DOMAIN so this Worker can read the session.
+COOKIE_DOMAIN = ".loctary.com"
+# The wishlist frontend origin(s) allowed to call this API with credentials.
+CORS_ALLOWED_ORIGINS = "https://wishlist.loctary.com"
+# Default wishlist owner shown on the index (the admin's auth uuid).
+WISHLIST_OWNER_ID = "f5171c16-c017-4c45-90f4-9161789425c7"

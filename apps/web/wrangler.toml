@@ -1,0 +1,32 @@
+# Cloudflare Worker: the TanStack Start SSR frontend (wishlist.loctary.com).
+#
+# Build first (inlines the VITE_* values), then deploy:
+#   pnpm --filter @loctary/wishlist-web build
+#   cd apps/web && npx wrangler deploy
+#
+# `vite build` emits a Worker-compatible SSR entry (dist/server/server.js,
+# `export default { fetch }`) + static client assets (dist/client). The assets
+# layer serves files like /assets/*; everything else falls through to the SSR
+# Worker. Only node:async_hooks is used → nodejs_compat covers it.
+
+name = "loctary-wishlist-web"
+main = "dist/server/server.js"
+compatibility_date = "2025-06-25"
+compatibility_flags = ["nodejs_compat"]
+
+[[routes]]
+pattern = "wishlist.loctary.com"
+custom_domain = true
+
+[assets]
+directory = "dist/client"
+binding = "ASSETS"
+
+# Build-time only — these are inlined by Vite at `pnpm build`, NOT read at
+# runtime. They are listed here for documentation; set them in the build
+# environment (connected Git build vars, or inline before `wrangler deploy`):
+#   VITE_AUTH_API_URL=https://auth.loctary.com
+#   VITE_WISHLIST_API_URL=https://api.wishlist.loctary.com
+#   VITE_AUTH_REMOTE_ENTRY=https://auth.loctary.com/remoteEntry.js
+#   VITE_AUTH_REMOTE_NAME=loctary_auth
+#   VITE_COOKIE_DOMAIN=.loctary.com
