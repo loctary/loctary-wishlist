@@ -1,0 +1,8 @@
+packages:
+  - "apps/*"
+
+allowBuilds:
+  esbuild: true
+  # wrangler's native deps — not needed for `wrangler deploy` (esbuild-based).
+  sharp: false
+  workerd: false

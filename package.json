@@ -1,0 +1,24 @@
+{
+  "name": "loctary-wishlist",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.5.2",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel run dev",
+    "dev:web": "pnpm --filter @loctary/wishlist-web run dev",
+    "dev:server": "pnpm --filter @loctary/wishlist-server run dev",
+    "build": "pnpm -r run build",
+    "build:web": "pnpm --filter @loctary/wishlist-web run build",
+    "build:server": "pnpm --filter @loctary/wishlist-server run build",
+    "preview:web": "pnpm --filter @loctary/wishlist-web run preview",
+    "start:server": "pnpm --filter @loctary/wishlist-server run start",
+    "typecheck": "pnpm -r run typecheck"
+  },
+  "devDependencies": {
+    "wrangler": "^4.104.0"
+  }
+}

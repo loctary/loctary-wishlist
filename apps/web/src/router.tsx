@@ -1,0 +1,21 @@
+import { createRouter } from "@tanstack/react-router";
+import { QueryClient } from "@tanstack/react-query";
+import { routeTree } from "./routeTree.gen";
+
+/**
+ * TanStack Start discovers the router via this `getRouter` export. We create a
+ * per-request QueryClient and pass it through the router context so routes and
+ * the root document share one cache.
+ */
+export function getRouter() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
+  });
+
+  return createRouter({
+    routeTree,
+    context: { queryClient },
+    defaultPreload: "intent",
+    scrollRestoration: true,
+  });
+}
