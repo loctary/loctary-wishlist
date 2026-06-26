@@ -14,7 +14,9 @@ import {
 import { Notifications } from "@mantine/notifications";
 import mantineCss from "@mantine/core/styles.css?url";
 import notificationsCss from "@mantine/notifications/styles.css?url";
-import { theme } from "../theme";
+import loctaryTokensCss from "../styles/loctary-tokens.css?url";
+import wishlistCss from "../styles/wishlist.css?url";
+import { theme, cssVariablesResolver } from "../theme";
 import { cookieColorSchemeManager } from "../lib/colorScheme";
 import { AppHeader } from "../components/Header";
 
@@ -33,6 +35,8 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     links: [
       { rel: "stylesheet", href: mantineCss },
       { rel: "stylesheet", href: notificationsCss },
+      { rel: "stylesheet", href: loctaryTokensCss },
+      { rel: "stylesheet", href: wishlistCss },
     ],
   }),
   component: RootComponent,
@@ -54,6 +58,7 @@ function RootComponent() {
         <QueryClientProvider client={queryClient}>
           <MantineProvider
             theme={theme}
+            cssVariablesResolver={cssVariablesResolver}
             defaultColorScheme="auto"
             colorSchemeManager={colorSchemeManager}
           >

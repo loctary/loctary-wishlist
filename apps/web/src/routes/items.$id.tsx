@@ -24,7 +24,7 @@ export const Route = createFileRoute("/items/$id")({
 const STATUS: Record<ItemStatus, { color: string; label: string } | null> = {
   available: null,
   reserved: { color: "gray", label: "Reserved" },
-  confirmed: { color: "teal", label: "Gifted" },
+  confirmed: { color: "moss", label: "Gifted" },
   declined: null,
 };
 
@@ -62,7 +62,7 @@ function ItemPage() {
               ? null
               : new Intl.NumberFormat(undefined, { style: "currency", currency: item.currency }).format(item.price);
           return (
-            <Card withBorder radius="md" padding="lg">
+            <Card withBorder radius="lg" padding="lg" shadow="sm">
               <Stack>
                 {item.imageUrl && (
                   <Card.Section>

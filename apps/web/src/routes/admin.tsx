@@ -50,9 +50,9 @@ export const Route = createFileRoute("/admin")({
 });
 
 const STATUS_COLOR: Record<ItemStatus, string> = {
-  available: "blue",
-  reserved: "yellow",
-  confirmed: "teal",
+  available: "moss",
+  reserved: "amber",
+  confirmed: "moss",
   declined: "gray",
 };
 
@@ -158,7 +158,7 @@ function AdminPage() {
       ) : (
         <Stack>
           {items.map((item) => (
-            <Card key={item.id} withBorder padding="md" radius="md">
+            <Card key={item.id} withBorder padding="md" radius="lg">
               <Group justify="space-between" wrap="nowrap" align="flex-start">
                 <Stack gap={4} style={{ flex: 1 }}>
                   <Group gap="xs">

@@ -91,8 +91,14 @@ export function cancelReservation(id: string) {
   return request<{ item: WishItem }>(`/wishlist/items/${id}/reserve`, { method: "DELETE" });
 }
 
+/** A reservation of the caller's, with the list-owner resolved for grouping. */
+export interface ReservedWishItem extends WishItem {
+  reservedAt: string | null;
+  owner: { id: string; email: string | null; name: string | null };
+}
+
 export function myReservations() {
-  return request<{ items: WishItem[] }>(`/wishlist/me/reservations`);
+  return request<{ items: ReservedWishItem[] }>(`/wishlist/me/reservations`);
 }
 
 /* ----------------------------- admin ------------------------------ */
