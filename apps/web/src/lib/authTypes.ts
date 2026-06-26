@@ -30,6 +30,12 @@ export interface AuthMountProps {
   routes?: AuthRoutes;
   onAuthenticated?: (user: AuthUser) => void;
   onNavigate?: (to: string, route: AuthRoute, params?: { email?: string }) => void;
+  /**
+   * Where Google OAuth returns the user. Defaults to the current window origin,
+   * so this host lands back on itself; only honoured if the auth server's
+   * OAUTH_ALLOWED_REDIRECTS contains its origin.
+   */
+  oauthRedirect?: string;
 }
 
 /** Props for the single-page mount (`loctary_auth/mountPage`). */
