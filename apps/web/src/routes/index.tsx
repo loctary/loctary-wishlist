@@ -3,12 +3,15 @@ import {
   Button,
   Center,
   Container,
+  Group,
   Loader,
   SimpleGrid,
   Stack,
   Text,
+  ThemeIcon,
   Title,
 } from "@mantine/core";
+import { IconConfetti, IconListCheck } from "@tabler/icons-react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useInViewport } from "@mantine/hooks";
@@ -39,11 +42,20 @@ function HomePage() {
 
   return (
     <Container size="lg" py="xl">
-      <Stack gap="lg">
-        <div>
-          <Title order={1}>My Wishlist</Title>
-          <Text c="dimmed">Browse the list and reserve a gift. Reserved items stay anonymous.</Text>
-        </div>
+      <Stack gap="xl">
+        <Group gap="md" align="center" wrap="nowrap">
+          <ThemeIcon size={60} radius="xl" variant="light" color="moss">
+            <IconListCheck size={30} />
+          </ThemeIcon>
+          <div>
+            <Title order={1} style={{ letterSpacing: "-0.03em" }}>
+              My wishlist
+            </Title>
+            <Text c="dimmed" mt={4}>
+              Browse the list and reserve a gift. Reserved items stay anonymous.
+            </Text>
+          </div>
+        </Group>
 
         {query.isLoading ? (
           <Center mih="40vh">
@@ -78,9 +90,12 @@ function HomePage() {
                   Load more
                 </Button>
               ) : (
-                <Text size="sm" c="dimmed">
-                  That's everything.
-                </Text>
+                <Stack align="center" gap={6}>
+                  <IconConfetti size={22} style={{ color: "var(--text-muted)", opacity: 0.6 }} />
+                  <Text size="sm" c="dimmed">
+                    That's the whole list — {items.length} items.
+                  </Text>
+                </Stack>
               )}
             </Center>
           </>

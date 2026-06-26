@@ -1,4 +1,5 @@
 import { Button, Tooltip } from "@mantine/core";
+import { IconBookmarkPlus, IconCheck, IconGift, IconLock } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
@@ -46,8 +47,8 @@ export function ReserveButton({ item, onChange }: { item: WishItem; onChange?: (
 
   if (item.status === "confirmed") {
     return (
-      <Button color="teal" variant="light" disabled fullWidth>
-        Gifted 🎉
+      <Button color="moss" variant="light" disabled fullWidth leftSection={<IconGift size={18} />}>
+        Gifted
       </Button>
     );
   }
@@ -55,7 +56,7 @@ export function ReserveButton({ item, onChange }: { item: WishItem; onChange?: (
   if (item.status === "reserved") {
     if (!session) {
       return (
-        <Button variant="light" color="gray" disabled fullWidth>
+        <Button variant="default" disabled fullWidth leftSection={<IconLock size={18} />}>
           Reserved
         </Button>
       );
@@ -65,11 +66,11 @@ export function ReserveButton({ item, onChange }: { item: WishItem; onChange?: (
     return (
       <Tooltip label="Cancel if this is your reservation" withArrow>
         <Button
-          variant="light"
-          color="gray"
+          variant="default"
           fullWidth
           loading={cancel.isPending}
           onClick={() => cancel.mutate()}
+          leftSection={<IconCheck size={18} />}
         >
           Reserved · cancel
         </Button>
@@ -79,14 +80,14 @@ export function ReserveButton({ item, onChange }: { item: WishItem; onChange?: (
 
   if (!session) {
     return (
-      <Button fullWidth onClick={() => router.navigate({ to: "/login" })}>
+      <Button fullWidth onClick={() => router.navigate({ to: "/login" })} leftSection={<IconBookmarkPlus size={18} />}>
         Log in to reserve
       </Button>
     );
   }
 
   return (
-    <Button fullWidth loading={reserve.isPending} onClick={() => reserve.mutate()}>
+    <Button fullWidth loading={reserve.isPending} onClick={() => reserve.mutate()} leftSection={<IconBookmarkPlus size={18} />}>
       Reserve
     </Button>
   );

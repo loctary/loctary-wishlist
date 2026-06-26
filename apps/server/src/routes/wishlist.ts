@@ -251,10 +251,15 @@ wishlist.get("/me/reservations", requireUser, async (c) => {
     .order("reserved_at", { ascending: false });
 
   if (error) return fail(c, 500, "Could not load your reservations");
+  const rows = data as ItemRow[];
+  // Resolve each item's list-owner so the client can group reservations by the
+  // person whose wishlist they're on. Reuses the same admin lookup as elsewhere.
+  const owners = await resolveUsers(rows.map((r) => r.owner_id));
   // It's the caller's own data, so the reserver is implicitly themselves.
-  const items = (data as ItemRow[]).map((row) => ({
+  const items = rows.map((row) => ({
     ...publicItem(row),
     reservedAt: row.reserved_at,
+    owner: owners.get(row.owner_id) ?? { id: row.owner_id, email: null, name: null },
   }));
   return c.json({ items });
 });
