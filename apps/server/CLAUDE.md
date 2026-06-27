@@ -12,7 +12,9 @@ shared `COOKIE_DOMAIN` (`loctary_access_token`, `loctary_refresh_token`).
 `src/auth.ts` reads the access token, verifies it with Supabase
 (`anon().auth.getUser`), and — like auth's `/me` — silently refreshes via the
 refresh token when the access token has expired (this Worker is on the same
-cookie domain, so it may re-set them). The user's role comes from `profiles`.
+cookie domain, so it may re-set them). The user's role **and display name** come
+from `profiles` (`display_name`), not the auth `user_metadata`; only the avatar
+still comes from metadata.
 
 - `loadSession` — always-on; stashes `{ id, email, role, name, avatarUrl } | null` on the context.
 - `requireUser` — 401 if no session.

@@ -140,23 +140,37 @@ function decodeCursor(raw: string): Cursor | null {
   return null;
 }
 
-/** Resolve a set of user ids to email/name/avatar via the auth admin API (deduped). */
+/**
+ * Resolve a set of user ids to name/avatar (deduped). The display name is the
+ * app's own `profiles.display_name` (one batched query), never the auth
+ * `user_metadata`. The avatar still comes from auth metadata (Google etc.).
+ */
 async function resolveUsers(ids: string[]) {
   const unique = [...new Set(ids)];
   const map = new Map<
     string,
-    { id: string; email: string | null; name: string | null; avatarUrl: string | null }
+    { id: string; name: string | null; avatarUrl: string | null }
   >();
+  if (unique.length === 0) return map;
+
+  // Names from profiles — a single batched query.
+  const { data: profiles } = await admin()
+    .from("profiles")
+    .select("id, display_name")
+    .in("id", unique);
+  const names = new Map(
+    (profiles ?? []).map((p) => [p.id as string, (p.display_name as string | null) ?? null]),
+  );
+
   await Promise.all(
     unique.map(async (id) => {
+      // Avatar still lives in auth user_metadata.
       const { data } = await admin().auth.admin.getUserById(id);
-      const u = data?.user;
-      const meta = u?.user_metadata as Record<string, unknown> | undefined;
+      const meta = data?.user?.user_metadata as Record<string, unknown> | undefined;
       const avatar = meta?.avatar_url ?? meta?.picture;
       map.set(id, {
         id,
-        email: u?.email ?? null,
-        name: (meta?.name as string | undefined) ?? null,
+        name: names.get(id) ?? null,
         avatarUrl: typeof avatar === "string" ? avatar : null,
       });
     }),
