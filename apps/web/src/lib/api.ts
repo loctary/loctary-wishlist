@@ -7,6 +7,18 @@ const API = (import.meta.env.VITE_WISHLIST_API_URL ?? "http://localhost:3003").r
 
 export type ItemStatus = "available" | "reserved" | "confirmed" | "declined";
 
+/**
+ * What the current viewer may do with this item — computed server-side against
+ * the session, so the UI can render button state up-front. Flags are true only
+ * for the asker (never reveal *who* reserved an item to anyone else).
+ */
+export interface ItemViewerCaps {
+  isOwner: boolean;
+  isReserver: boolean;
+  canReserve: boolean;
+  canCancel: boolean;
+}
+
 /** Public projection (what the list/detail endpoints return). */
 export interface WishItem {
   id: string;
@@ -21,13 +33,14 @@ export interface WishItem {
   position: number;
   status: ItemStatus;
   createdAt: string;
+  viewer: ItemViewerCaps;
 }
 
-/** Admin projection — adds the reservation + who made it. */
+/** Owner projection — adds the reservation + who made it (id + name, no email). */
 export interface AdminWishItem extends WishItem {
   reservedBy: string | null;
   reservedAt: string | null;
-  reserver: { id: string; email: string | null; name: string | null } | null;
+  reserver: { id: string; name: string | null } | null;
   updatedAt: string;
 }
 
@@ -81,6 +94,17 @@ export function getItem(id: string) {
   return request<{ item: WishItem }>(`/wishlist/items/${id}`);
 }
 
+/** A user's public profile — display name + avatar (no email). */
+export interface PublicUser {
+  id: string;
+  name: string | null;
+  avatarUrl: string | null;
+}
+
+export function getUser(id: string) {
+  return request<{ user: PublicUser }>(`/wishlist/users/${id}`);
+}
+
 /* ----------------------------- user ------------------------------- */
 
 export function reserveItem(id: string) {
@@ -94,14 +118,14 @@ export function cancelReservation(id: string) {
 /** A reservation of the caller's, with the list-owner resolved for grouping. */
 export interface ReservedWishItem extends WishItem {
   reservedAt: string | null;
-  owner: { id: string; email: string | null; name: string | null };
+  owner: { id: string; name: string | null };
 }
 
 export function myReservations() {
   return request<{ items: ReservedWishItem[] }>(`/wishlist/me/reservations`);
 }
 
-/* ----------------------------- admin ------------------------------ */
+/* --------------------- manage (your own list) --------------------- */
 
 export interface ItemInput {
   title: string;
@@ -114,33 +138,33 @@ export interface ItemInput {
   position?: number;
 }
 
-export function adminListItems(owner?: string) {
-  const qs = owner ? `?owner=${encodeURIComponent(owner)}` : "";
-  return request<{ items: AdminWishItem[] }>(`/wishlist/admin/items${qs}`);
+/** The caller's own list (always `owner = caller`), incl. who reserved each item. */
+export function manageListItems() {
+  return request<{ items: AdminWishItem[] }>(`/wishlist/manage/items`);
 }
 
-export function adminCreateItem(input: ItemInput) {
-  return request<{ item: AdminWishItem }>(`/wishlist/admin/items`, {
+export function manageCreateItem(input: ItemInput) {
+  return request<{ item: AdminWishItem }>(`/wishlist/manage/items`, {
     method: "POST",
     body: JSON.stringify(input),
   });
 }
 
-export function adminUpdateItem(id: string, input: Partial<ItemInput>) {
-  return request<{ item: AdminWishItem }>(`/wishlist/admin/items/${id}`, {
+export function manageUpdateItem(id: string, input: Partial<ItemInput>) {
+  return request<{ item: AdminWishItem }>(`/wishlist/manage/items/${id}`, {
     method: "PATCH",
     body: JSON.stringify(input),
   });
 }
 
-export function adminDeleteItem(id: string) {
-  return request<{ ok: true }>(`/wishlist/admin/items/${id}`, { method: "DELETE" });
+export function manageDeleteItem(id: string) {
+  return request<{ ok: true }>(`/wishlist/manage/items/${id}`, { method: "DELETE" });
 }
 
-export function adminConfirmItem(id: string) {
-  return request<{ item: AdminWishItem }>(`/wishlist/admin/items/${id}/confirm`, { method: "POST" });
+export function manageConfirmItem(id: string) {
+  return request<{ item: AdminWishItem }>(`/wishlist/manage/items/${id}/confirm`, { method: "POST" });
 }
 
-export function adminDeclineItem(id: string) {
-  return request<{ item: AdminWishItem }>(`/wishlist/admin/items/${id}/decline`, { method: "POST" });
+export function manageDeclineItem(id: string) {
+  return request<{ item: AdminWishItem }>(`/wishlist/manage/items/${id}/decline`, { method: "POST" });
 }

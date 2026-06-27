@@ -4,16 +4,18 @@ import { admin } from "../supabase.js";
 import { env } from "../env.js";
 import {
   loadSession,
-  requireAdmin,
   requireUser,
   type AppVariables,
+  type SessionUser,
 } from "../auth.js";
 
 /**
  * Wishlist API. All data access uses the service-role client (`admin()`); the
- * `requireUser` / `requireAdmin` middleware do the authorization. Public
- * responses go through `publicItem()`, which strips who reserved an item —
- * browsers learn an item is `reserved` (so nobody double-buys) but never by whom.
+ * `requireUser` middleware plus per-item ownership checks do the authorization.
+ * Every user owns a wishlist: they manage their own items under `/manage/*` and
+ * may reserve from anyone else's. Public responses go through `publicItem()`,
+ * which strips who reserved an item — browsers learn an item is `reserved` (so
+ * nobody double-buys) but never by whom.
  */
 
 const wishlist = new Hono<{ Variables: AppVariables }>();
@@ -65,8 +67,20 @@ interface ItemRow {
   updated_at: string;
 }
 
-/** Public projection — never leaks the reserver's identity. */
-function publicItem(row: ItemRow) {
+/**
+ * Public projection — never leaks the reserver's identity. It does include a
+ * `viewer` block of capability flags computed against the current session: these
+ * are true only for the asker (a third party sees all-false), so the frontend can
+ * render the right button state up-front without revealing *who* reserved an item.
+ *
+ * - `isOwner`     — the viewer owns this item (can't reserve their own).
+ * - `isReserver`  — the viewer is the one who reserved it.
+ * - `canReserve`  — available, signed in, and not the owner.
+ * - `canCancel`   — reserved, and the viewer is the reserver OR the list owner.
+ */
+function publicItem(row: ItemRow, viewer?: SessionUser | null) {
+  const isOwner = !!viewer && row.owner_id === viewer.id;
+  const isReserver = !!viewer && row.reserved_by === viewer.id;
   return {
     id: row.id,
     ownerId: row.owner_id,
@@ -80,16 +94,26 @@ function publicItem(row: ItemRow) {
     position: row.position,
     status: row.status,
     createdAt: row.created_at,
+    viewer: {
+      isOwner,
+      isReserver,
+      canReserve: !!viewer && row.status === "available" && !isOwner,
+      canCancel: !!viewer && row.status === "reserved" && (isReserver || isOwner),
+    },
   };
 }
 
-/** Admin projection — includes the reservation, resolved to the reserver. */
-function adminItem(row: ItemRow, reserver: { id: string; email: string | null; name: string | null } | null) {
+/**
+ * Owner projection — includes the reservation, resolved to the reserver. Only
+ * the reserver's id + display name are exposed; their email is never leaked to
+ * the client, even to the list owner.
+ */
+function adminItem(row: ItemRow, reserver: { id: string; name: string | null } | null) {
   return {
     ...publicItem(row),
     reservedBy: row.reserved_by,
     reservedAt: row.reserved_at,
-    reserver,
+    reserver: reserver ? { id: reserver.id, name: reserver.name } : null,
     updatedAt: row.updated_at,
   };
 }
@@ -114,18 +138,24 @@ function decodeCursor(raw: string): Cursor | null {
   return null;
 }
 
-/** Resolve a set of user ids to email/name via the auth admin API (deduped). */
+/** Resolve a set of user ids to email/name/avatar via the auth admin API (deduped). */
 async function resolveUsers(ids: string[]) {
   const unique = [...new Set(ids)];
-  const map = new Map<string, { id: string; email: string | null; name: string | null }>();
+  const map = new Map<
+    string,
+    { id: string; email: string | null; name: string | null; avatarUrl: string | null }
+  >();
   await Promise.all(
     unique.map(async (id) => {
       const { data } = await admin().auth.admin.getUserById(id);
       const u = data?.user;
+      const meta = u?.user_metadata as Record<string, unknown> | undefined;
+      const avatar = meta?.avatar_url ?? meta?.picture;
       map.set(id, {
         id,
         email: u?.email ?? null,
-        name: (u?.user_metadata?.name as string | undefined) ?? null,
+        name: (meta?.name as string | undefined) ?? null,
+        avatarUrl: typeof avatar === "string" ? avatar : null,
       });
     }),
   );
@@ -221,7 +251,8 @@ wishlist.get("/items", async (c) => {
   const page = hasMore ? rows.slice(0, limit) : rows;
   const nextCursor = hasMore ? encodeCursor(page[page.length - 1]!) : null;
 
-  return c.json({ items: page.map(publicItem), nextCursor });
+  const viewer = c.get("user");
+  return c.json({ items: page.map((r) => publicItem(r, viewer)), nextCursor });
 });
 
 /* -------------------------------------------------------------------------- */
@@ -236,7 +267,7 @@ wishlist.get("/items/:id", async (c) => {
 
   if (error) return fail(c, 500, "Could not load the item");
   if (!data) return fail(c, 404, "Item not found");
-  return c.json({ item: publicItem(data as ItemRow) });
+  return c.json({ item: publicItem(data as ItemRow, c.get("user")) });
 });
 
 /* -------------------------------------------------------------------------- */
@@ -255,11 +286,12 @@ wishlist.get("/me/reservations", requireUser, async (c) => {
   // Resolve each item's list-owner so the client can group reservations by the
   // person whose wishlist they're on. Reuses the same admin lookup as elsewhere.
   const owners = await resolveUsers(rows.map((r) => r.owner_id));
-  // It's the caller's own data, so the reserver is implicitly themselves.
+  // It's the caller's own data, so the reserver is implicitly themselves. Expose
+  // only the owner's id + display name — never their email.
   const items = rows.map((row) => ({
-    ...publicItem(row),
+    ...publicItem(row, user),
     reservedAt: row.reserved_at,
-    owner: owners.get(row.owner_id) ?? { id: row.owner_id, email: null, name: null },
+    owner: { id: row.owner_id, name: owners.get(row.owner_id)?.name ?? null },
   }));
   return c.json({ items });
 });
@@ -280,8 +312,9 @@ wishlist.post("/items/:id/reserve", requireUser, async (c) => {
   if (!existing) return fail(c, 404, "Item not found");
 
   const row = existing as ItemRow;
+  if (row.owner_id === user.id) return fail(c, 400, "You can't reserve from your own wishlist");
   if (row.status === "reserved" || row.status === "confirmed") {
-    if (row.reserved_by === user.id) return c.json({ item: publicItem(row) }); // idempotent
+    if (row.reserved_by === user.id) return c.json({ item: publicItem(row, user) }); // idempotent
     return fail(c, 409, "This item is already reserved");
   }
   if (row.status === "declined") return fail(c, 409, "This item is not available");
@@ -296,7 +329,7 @@ wishlist.post("/items/:id/reserve", requireUser, async (c) => {
 
   if (error) return fail(c, 500, "Could not reserve the item");
   if (!data) return fail(c, 409, "This item is already reserved");
-  return c.json({ item: publicItem(data as ItemRow) });
+  return c.json({ item: publicItem(data as ItemRow, user) });
 });
 
 /* -------------------------------------------------------------------------- */
@@ -317,20 +350,38 @@ wishlist.delete("/items/:id/reserve", requireUser, async (c) => {
 
   if (error) return fail(c, 500, "Could not cancel the reservation");
   if (!data) return fail(c, 409, "You don't have an active reservation on this item");
-  return c.json({ item: publicItem(data as ItemRow) });
+  return c.json({ item: publicItem(data as ItemRow, user) });
+});
+
+/* -------------------------------------------------------------------------- */
+/* GET /users/:id  -> a user's public profile (display name only, no email)    */
+/* Used by the host to label a wishlist / item with whose list it is.          */
+/* -------------------------------------------------------------------------- */
+wishlist.get("/users/:id", async (c) => {
+  const id = c.req.param("id");
+  const resolved = (await resolveUsers([id])).get(id);
+  // resolveUsers always sets an entry; an unknown id yields null name/avatar.
+  return c.json({
+    user: { id, name: resolved?.name ?? null, avatarUrl: resolved?.avatarUrl ?? null },
+  });
 });
 
 /* ========================================================================== */
-/* Admin                                                                       */
+/* Manage — the caller's OWN wishlist                                          */
+/*                                                                             */
+/* Any logged-in user owns a wishlist. These routes operate strictly on the    */
+/* caller's own items (`owner_id = caller.id`); the ownership filter lives in   */
+/* each query so it's atomic. They expose the reserver (like the old admin      */
+/* view) so the owner can confirm/decline.                                      */
 /* ========================================================================== */
 
-/* GET /admin/items  -> full list incl. reserver identity                      */
-wishlist.get("/admin/items", requireAdmin, async (c) => {
-  const owner = c.req.query("owner") || env.wishlistOwnerId;
+/* GET /manage/items  -> the caller's own list incl. reserver identity         */
+wishlist.get("/manage/items", requireUser, async (c) => {
+  const user = c.get("user")!;
   const { data, error } = await admin()
     .from("wishlist_items")
     .select(ITEM_COLUMNS)
-    .eq("owner_id", owner)
+    .eq("owner_id", user.id)
     .order("position", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -340,8 +391,8 @@ wishlist.get("/admin/items", requireAdmin, async (c) => {
   return c.json({ items: rows.map((r) => adminItem(r, r.reserved_by ? reservers.get(r.reserved_by) ?? null : null)) });
 });
 
-/* POST /admin/items  -> create                                                */
-wishlist.post("/admin/items", requireAdmin, async (c) => {
+/* POST /manage/items  -> create on the caller's own list                      */
+wishlist.post("/manage/items", requireUser, async (c) => {
   const user = c.get("user")!;
   const parsed = await parseBody(c, createSchema);
   if (!parsed.ok) return fail(c, 400, parsed.error, parsed.fields);
@@ -356,8 +407,9 @@ wishlist.post("/admin/items", requireAdmin, async (c) => {
   return c.json({ item: adminItem(data as ItemRow, null) }, 201);
 });
 
-/* PATCH /admin/items/:id  -> edit                                             */
-wishlist.patch("/admin/items/:id", requireAdmin, async (c) => {
+/* PATCH /manage/items/:id  -> edit (only your own item)                       */
+wishlist.patch("/manage/items/:id", requireUser, async (c) => {
+  const user = c.get("user")!;
   const parsed = await parseBody(c, editSchema);
   if (!parsed.ok) return fail(c, 400, parsed.error, parsed.fields);
 
@@ -365,6 +417,7 @@ wishlist.patch("/admin/items/:id", requireAdmin, async (c) => {
     .from("wishlist_items")
     .update(toColumns(parsed.data))
     .eq("id", c.req.param("id"))
+    .eq("owner_id", user.id) // ownership guard
     .select(ITEM_COLUMNS)
     .maybeSingle();
 
@@ -375,47 +428,53 @@ wishlist.patch("/admin/items/:id", requireAdmin, async (c) => {
   return c.json({ item: adminItem(row, reserver) });
 });
 
-/* DELETE /admin/items/:id  -> delete                                          */
-wishlist.delete("/admin/items/:id", requireAdmin, async (c) => {
+/* DELETE /manage/items/:id  -> delete (only your own item)                    */
+wishlist.delete("/manage/items/:id", requireUser, async (c) => {
+  const user = c.get("user")!;
   const { error, count } = await admin()
     .from("wishlist_items")
     .delete({ count: "exact" })
-    .eq("id", c.req.param("id"));
+    .eq("id", c.req.param("id"))
+    .eq("owner_id", user.id); // ownership guard
 
   if (error) return fail(c, 500, "Could not delete the item");
   if (!count) return fail(c, 404, "Item not found");
   return c.json({ ok: true });
 });
 
-/* POST /admin/items/:id/confirm  -> reserved -> confirmed (gift presented)    */
-wishlist.post("/admin/items/:id/confirm", requireAdmin, async (c) => {
+/* POST /manage/items/:id/confirm  -> reserved -> confirmed (gift presented)   */
+wishlist.post("/manage/items/:id/confirm", requireUser, async (c) => {
+  const user = c.get("user")!;
   const { data, error } = await admin()
     .from("wishlist_items")
     .update({ status: "confirmed" })
     .eq("id", c.req.param("id"))
+    .eq("owner_id", user.id) // ownership guard
     .eq("status", "reserved")
     .select(ITEM_COLUMNS)
     .maybeSingle();
 
   if (error) return fail(c, 500, "Could not confirm the item");
-  if (!data) return fail(c, 409, "Only a reserved item can be confirmed");
+  if (!data) return fail(c, 409, "Only a reserved item on your list can be confirmed");
   const row = data as ItemRow;
   const reserver = row.reserved_by ? (await resolveUsers([row.reserved_by])).get(row.reserved_by) ?? null : null;
   return c.json({ item: adminItem(row, reserver) });
 });
 
-/* POST /admin/items/:id/decline  -> reserved -> available (release)           */
-wishlist.post("/admin/items/:id/decline", requireAdmin, async (c) => {
+/* POST /manage/items/:id/decline  -> reserved -> available (release)          */
+wishlist.post("/manage/items/:id/decline", requireUser, async (c) => {
+  const user = c.get("user")!;
   const { data, error } = await admin()
     .from("wishlist_items")
     .update({ status: "available", reserved_by: null, reserved_at: null })
     .eq("id", c.req.param("id"))
+    .eq("owner_id", user.id) // ownership guard
     .eq("status", "reserved")
     .select(ITEM_COLUMNS)
     .maybeSingle();
 
   if (error) return fail(c, 500, "Could not decline the reservation");
-  if (!data) return fail(c, 409, "Only a reserved item can be declined");
+  if (!data) return fail(c, 409, "Only a reserved item on your list can be declined");
   return c.json({ item: adminItem(data as ItemRow, null) });
 });
 

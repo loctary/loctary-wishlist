@@ -1,3 +1,4 @@
+import type { MouseEvent } from "react";
 import { Button, Tooltip } from "@mantine/core";
 import { IconBookmarkPlus, IconCheck, IconGift, IconLock } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
@@ -18,17 +19,27 @@ export function ReserveButton({ item, onChange }: { item: WishItem; onChange?: (
   const router = useRouter();
   const queryClient = useQueryClient();
 
+  // Reserving/cancelling touches every view of this item: the public lists
+  // (`items`), the reserver's `/reserved` page (`my-reservations`), the owner's
+  // management view (`manage-items`), and the item detail (`item`).
+  const refresh = () => {
+    queryClient.invalidateQueries({ queryKey: ["items"] });
+    queryClient.invalidateQueries({ queryKey: ["my-reservations"] });
+    queryClient.invalidateQueries({ queryKey: ["manage-items"] });
+    queryClient.invalidateQueries({ queryKey: ["item", item.id] });
+  };
+
   const reserve = useMutation({
     mutationFn: () => reserveItem(item.id),
     onSuccess: (res) => {
       notifications.show({ color: "teal", message: "Reserved — thank you!" });
       onChange?.(res.item);
-      queryClient.invalidateQueries({ queryKey: ["items"] });
+      refresh();
     },
     onError: (e: unknown) => {
       const msg = e instanceof WishlistApiError ? e.message : "Could not reserve";
       notifications.show({ color: "red", message: msg });
-      queryClient.invalidateQueries({ queryKey: ["items"] });
+      refresh();
     },
   });
 
@@ -37,13 +48,20 @@ export function ReserveButton({ item, onChange }: { item: WishItem; onChange?: (
     onSuccess: (res) => {
       notifications.show({ color: "gray", message: "Reservation cancelled" });
       onChange?.(res.item);
-      queryClient.invalidateQueries({ queryKey: ["items"] });
+      refresh();
     },
     onError: (e: unknown) => {
       const msg = e instanceof WishlistApiError ? e.message : "Could not cancel";
       notifications.show({ color: "red", message: msg });
     },
   });
+
+  // Capability flags from the backend — true only for this viewer, so we can
+  // render the right state (and tooltips) without revealing who reserved an item.
+  const v = item.viewer;
+  // A disabled-looking button that still shows its tooltip on hover (a truly
+  // `disabled` button swallows pointer events, so Tooltip wouldn't fire).
+  const blockClick = (e: MouseEvent<HTMLButtonElement>) => e.preventDefault();
 
   if (item.status === "confirmed") {
     return (
@@ -54,25 +72,36 @@ export function ReserveButton({ item, onChange }: { item: WishItem; onChange?: (
   }
 
   if (item.status === "reserved") {
-    if (!session) {
+    if (v.canCancel) {
       return (
-        <Button variant="default" disabled fullWidth leftSection={<IconLock size={18} />}>
-          Reserved
-        </Button>
+        <Tooltip label={v.isOwner ? "Release this reservation" : "Cancel your reservation"}>
+          <Button
+            variant="default"
+            fullWidth
+            loading={cancel.isPending}
+            onClick={() => cancel.mutate()}
+            leftSection={<IconCheck size={18} />}
+          >
+            Reserved · cancel
+          </Button>
+        </Tooltip>
       );
     }
-    // Logged-in: offer cancel; the backend allows it only for the owner of the
-    // reservation and otherwise returns a clear error.
     return (
-      <Tooltip label="Cancel if this is your reservation" withArrow>
-        <Button
-          variant="default"
-          fullWidth
-          loading={cancel.isPending}
-          onClick={() => cancel.mutate()}
-          leftSection={<IconCheck size={18} />}
-        >
-          Reserved · cancel
+      <Tooltip label="Only the person who reserved it or the wishlist owner can cancel.">
+        <Button variant="default" fullWidth data-disabled onClick={blockClick} leftSection={<IconLock size={18} />}>
+          Reserved
+        </Button>
+      </Tooltip>
+    );
+  }
+
+  // Not reserved / confirmed → it's available (or otherwise not reservable).
+  if (v.isOwner) {
+    return (
+      <Tooltip label="You can't reserve from your own wishlist.">
+        <Button variant="default" fullWidth data-disabled onClick={blockClick} leftSection={<IconLock size={18} />}>
+          Your item
         </Button>
       </Tooltip>
     );
@@ -86,9 +115,17 @@ export function ReserveButton({ item, onChange }: { item: WishItem; onChange?: (
     );
   }
 
+  if (v.canReserve) {
+    return (
+      <Button fullWidth loading={reserve.isPending} onClick={() => reserve.mutate()} leftSection={<IconBookmarkPlus size={18} />}>
+        Reserve
+      </Button>
+    );
+  }
+
   return (
-    <Button fullWidth loading={reserve.isPending} onClick={() => reserve.mutate()} leftSection={<IconBookmarkPlus size={18} />}>
-      Reserve
+    <Button variant="default" disabled fullWidth>
+      Unavailable
     </Button>
   );
 }

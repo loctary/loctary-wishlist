@@ -1,5 +1,6 @@
 import {
   createTheme,
+  Tooltip,
   type CSSVariablesResolver,
   type MantineColorsTuple,
 } from "@mantine/core";
@@ -57,6 +58,15 @@ export const theme = createTheme({
     fontFamily:
       '"Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
     fontWeight: "700",
+  },
+  components: {
+    // Global tooltip style: no arrow, "pop" transition.
+    Tooltip: Tooltip.extend({
+      defaultProps: {
+        withArrow: false,
+        transitionProps: { transition: "pop" },
+      },
+    }),
   },
 });
 

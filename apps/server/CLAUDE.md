@@ -16,7 +16,16 @@ cookie domain, so it may re-set them). The user's role comes from `profiles`.
 
 - `loadSession` — always-on; stashes `{ id, email, role } | null` on the context.
 - `requireUser` — 401 if no session.
-- `requireAdmin` — 403 if `role !== 'admin'`.
+- `requireAdmin` — 403 if `role !== 'admin'` (still defined; no longer used by
+  any route — management is **ownership-based**, see below).
+
+## Ownership, not admin
+
+Every user owns a wishlist. The `/manage/*` routes act strictly on the caller's
+**own** items: the `owner_id = caller.id` filter is baked into each query, so it's
+atomic (a non-owner just gets a 404). The `admin` role no longer gates anything —
+its only remaining meaning is that `WISHLIST_OWNER_ID` (the admin) is the list the
+host's index page renders.
 
 `src/cookies.ts` **must** keep the same cookie names/policy as loctary-auth.
 
@@ -38,15 +47,16 @@ cookie domain, so it may re-set them). The user's role comes from `profiles`.
 | ------ | -------------------------- | ------------ | ----- |
 | GET    | `/items?owner=&cursor=&limit=` | public   | infinite list; keyset cursor over `(position, created_at, id)`; default owner = `WISHLIST_OWNER_ID`. `publicItem()` hides the reserver. |
 | GET    | `/items/:id`               | public       | single item (`publicItem()`) |
-| GET    | `/me/reservations`         | requireUser  | the caller's own reservations |
-| POST   | `/items/:id/reserve`       | requireUser  | available → reserved; 409 if taken; idempotent for the same user |
+| GET    | `/users/:id`               | public       | a user's public profile (`{ id, name }`; **no email**) — to label whose list it is |
+| GET    | `/me/reservations`         | requireUser  | the caller's own reservations, each with its list `owner` resolved |
+| POST   | `/items/:id/reserve`       | requireUser  | available → reserved; 409 if taken; idempotent for the same user; **400 if it's your own list** |
 | DELETE | `/items/:id/reserve`       | requireUser  | cancel own reservation (only while `reserved`) → available |
-| GET    | `/admin/items`             | requireAdmin | full list incl. reserver email/name |
-| POST   | `/admin/items`             | requireAdmin | create (owner = caller) |
-| PATCH  | `/admin/items/:id`         | requireAdmin | edit |
-| DELETE | `/admin/items/:id`         | requireAdmin | delete |
-| POST   | `/admin/items/:id/confirm` | requireAdmin | reserved → confirmed (gift presented) |
-| POST   | `/admin/items/:id/decline` | requireAdmin | reserved → available (release) |
+| GET    | `/manage/items`            | requireUser  | the caller's **own** list incl. reserver id + name (**no email**) |
+| POST   | `/manage/items`            | requireUser  | create (owner = caller) |
+| PATCH  | `/manage/items/:id`        | requireUser + own | edit (404 if not your item) |
+| DELETE | `/manage/items/:id`        | requireUser + own | delete (404 if not your item) |
+| POST   | `/manage/items/:id/confirm`| requireUser + own | reserved → confirmed (gift presented) |
+| POST   | `/manage/items/:id/decline`| requireUser + own | reserved → available (release) |
 
 ## Error contract
 
@@ -57,9 +67,11 @@ zod validation messages to specific inputs.
 ## Reserve privacy
 
 `publicItem()` exposes only `status` (`available` / `reserved` / `confirmed`),
-never `reserved_by` / `reserved_at`. Only `/admin/*` and the caller's own
-`/me/reservations` reveal the reserver. This is the whole point — browsers see an
-item is taken (no double-buying) without learning who took it.
+never `reserved_by` / `reserved_at`. Only the owner's own `/manage/items` and the
+caller's own `/me/reservations` reveal the reserver. Browsers see an item is taken
+(no double-buying) without learning who took it; the list **owner**, however, does
+see who reserved their items (so they can confirm/decline). **No endpoint ever
+returns another user's email** — user objects expose only `{ id, name }`.
 
 ## Data access & RLS
 

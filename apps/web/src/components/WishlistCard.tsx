@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Anchor, Box, Card, Group, Stack, Text, Title } from "@mantine/core";
 import { IconExternalLink, IconGift } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
@@ -24,7 +25,20 @@ function formatPrice(price: number | null, currency: string) {
   }
 }
 
-export function WishlistCard({ item, onChange }: { item: WishItem; onChange?: (next: WishItem) => void }) {
+/**
+ * One wishlist item card. By default the footer is the public `ReserveButton`;
+ * pass `footer` (e.g. owner edit/delete/approve controls) to swap it while
+ * keeping the identical cover/title/price visuals.
+ */
+export function WishlistCard({
+  item,
+  onChange,
+  footer,
+}: {
+  item: WishItem;
+  onChange?: (next: WishItem) => void;
+  footer?: ReactNode;
+}) {
   const badge = STATUS_BADGE[item.status];
   const price = formatPrice(item.price, item.currency);
   const tint = tintFor(item.id);
@@ -40,7 +54,13 @@ export function WishlistCard({ item, onChange }: { item: WishItem; onChange?: (n
       data-dim={dim ? "true" : undefined}
       style={{ display: "flex", flexDirection: "column" }}
     >
-      <Box className="wl-cover" style={{ background: tint.bg }}>
+      <Link
+        to="/user/$userId/wishlist/$itemId"
+        params={{ userId: item.ownerId, itemId: item.id }}
+        className="wl-cover"
+        style={{ background: tint.bg, color: tint.fg, textDecoration: "none" }}
+        aria-label={item.title}
+      >
         {item.imageUrl ? (
           <img src={item.imageUrl} alt={item.title} />
         ) : (
@@ -52,12 +72,12 @@ export function WishlistCard({ item, onChange }: { item: WishItem; onChange?: (n
             {badge.label}
           </span>
         )}
-      </Box>
+      </Link>
 
       <Stack gap={6} p="md" style={{ flex: 1 }}>
         <Link
-          to="/items/$id"
-          params={{ id: item.id }}
+          to="/user/$userId/wishlist/$itemId"
+          params={{ userId: item.ownerId, itemId: item.id }}
           style={{ textDecoration: "none", color: "inherit" }}
         >
           <Title order={5} fw={700} lineClamp={2} style={{ letterSpacing: "-0.01em" }}>
@@ -80,7 +100,7 @@ export function WishlistCard({ item, onChange }: { item: WishItem; onChange?: (n
         )}
 
         <Box mt="auto" pt={6}>
-          <ReserveButton item={item} onChange={onChange} />
+          {footer ?? <ReserveButton item={item} onChange={onChange} />}
         </Box>
       </Stack>
     </Card>

@@ -10,6 +10,14 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
+/* Always reserve the vertical scrollbar's space so the page width is constant
+   whether content scrolls or not. Without this, short pages (loading, empty,
+   a single item) have no scrollbar and tall pages (full grids) do, which shifts
+   the centred container sideways — a visible horizontal "jump" on navigation. */
+html {
+  scrollbar-gutter: stable;
+}
+
 :root {
   /* ---- Amber (primary / "sunbaked") ---- */
   --amber-0: #FFF7EC;
