@@ -3,9 +3,10 @@ import { Button, Tooltip } from "@mantine/core";
 import { IconBookmarkPlus, IconCheck, IconGift, IconLock } from "@tabler/icons-react";
 import { notifications } from "@mantine/notifications";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "@tanstack/react-router";
+import { useRouter, useRouterState } from "@tanstack/react-router";
 import { cancelReservation, reserveItem, WishlistApiError, type WishItem } from "../lib/api";
 import { useSession } from "../lib/session";
+import { loginSearch } from "../lib/authNav";
 
 /**
  * The public reserve control. Logged-out users are sent to /login. The button
@@ -17,6 +18,7 @@ import { useSession } from "../lib/session";
 export function ReserveButton({ item, onChange }: { item: WishItem; onChange?: (next: WishItem) => void }) {
   const { data: session } = useSession();
   const router = useRouter();
+  const here = useRouterState({ select: (s) => s.location.href });
   const queryClient = useQueryClient();
 
   // Reserving/cancelling touches every view of this item: the public lists
@@ -109,7 +111,7 @@ export function ReserveButton({ item, onChange }: { item: WishItem; onChange?: (
 
   if (!session) {
     return (
-      <Button fullWidth onClick={() => router.navigate({ to: "/login" })} leftSection={<IconBookmarkPlus size={18} />}>
+      <Button fullWidth onClick={() => router.navigate({ to: "/login", search: loginSearch(here) })} leftSection={<IconBookmarkPlus size={18} />}>
         Log in to reserve
       </Button>
     );

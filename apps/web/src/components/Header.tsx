@@ -23,6 +23,7 @@ import {
 } from "@tabler/icons-react";
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { useSession, useLogout } from "../lib/session";
+import { loginSearch } from "../lib/authNav";
 
 /** Type-led brand wordmark: amber "l" + "octary". */
 function Wordmark() {
@@ -38,6 +39,7 @@ export function AppHeader() {
   const logout = useLogout();
   const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const here = useRouterState({ select: (s) => s.location.href });
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
   const [drawerOpened, drawer] = useDisclosure(false);
 
@@ -188,7 +190,7 @@ export function AppHeader() {
               </Menu.Dropdown>
             </Menu>
           ) : (
-            <Button size="sm" onClick={() => router.navigate({ to: "/login" })}>
+            <Button size="sm" onClick={() => router.navigate({ to: "/login", search: loginSearch(here) })}>
               Log in
             </Button>
           )}

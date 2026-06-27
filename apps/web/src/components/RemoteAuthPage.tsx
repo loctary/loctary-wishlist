@@ -3,7 +3,7 @@ import { Alert, Box, Center, Loader } from "@mantine/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { loadAuthPageMount } from "../lib/remoteAuth";
-import { AUTH_PATHS } from "../lib/authNav";
+import { AUTH_PATHS, redirectTarget } from "../lib/authNav";
 import type { AuthMountKey } from "../lib/authTypes";
 
 /**
@@ -16,7 +16,7 @@ import type { AuthMountKey } from "../lib/authTypes";
  * `email` in the query), so each screen is its own URL and its own mount. On
  * success we refresh the session and send the user home.
  */
-export function RemoteAuthPage({ page }: { page: AuthMountKey }) {
+export function RemoteAuthPage({ page, redirect }: { page: AuthMountKey; redirect?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -27,6 +27,9 @@ export function RemoteAuthPage({ page }: { page: AuthMountKey }) {
     let unmount: (() => void) | undefined;
     let cancelled = false;
 
+    // Where to land once authenticated: the page the user came from, else home.
+    const target = redirectTarget(redirect);
+
     loadAuthPageMount()
       .then((mount) => {
         if (cancelled || !ref.current) return;
@@ -35,10 +38,21 @@ export function RemoteAuthPage({ page }: { page: AuthMountKey }) {
           page,
           apiUrl: import.meta.env.VITE_AUTH_API_URL,
           routes: AUTH_PATHS,
+          // Google OAuth leaves the SPA entirely, so the return target can't ride
+          // a JS callback — it goes through the server as a full URL. Same origin,
+          // plus the path, so the auth server (which allowlists by origin) returns
+          // the user to exactly where they started.
+          oauthRedirect:
+            typeof window !== "undefined" ? window.location.origin + target : undefined,
           onNavigate: (_to, route, params) => {
             router.navigate({
               to: AUTH_PATHS[route],
-              search: params?.email ? { email: params.email } : {},
+              // Carry the in-progress email AND the redirect across auth screens
+              // (e.g. login → register) so the target survives the whole flow.
+              search: {
+                ...(params?.email ? { email: params.email } : {}),
+                ...(redirect ? { redirect } : {}),
+              },
             });
           },
           onAuthenticated: () => {
@@ -46,7 +60,7 @@ export function RemoteAuthPage({ page }: { page: AuthMountKey }) {
             // previous (anonymous) user, incl. per-item `viewer` flags. Invalidate
             // the whole cache so everything refetches for the new user.
             queryClient.invalidateQueries();
-            router.navigate({ to: "/" });
+            router.navigate({ to: target });
           },
         });
       })
@@ -58,7 +72,7 @@ export function RemoteAuthPage({ page }: { page: AuthMountKey }) {
       cancelled = true;
       unmount?.();
     };
-  }, [page, router, queryClient]);
+  }, [page, redirect, router, queryClient]);
 
   if (error) {
     return (
