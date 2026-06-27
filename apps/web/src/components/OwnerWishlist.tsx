@@ -18,6 +18,8 @@ import { notifications } from "@mantine/notifications";
 import {
   IconCheck,
   IconEdit,
+  IconEye,
+  IconEyeOff,
   IconPlus,
   IconTrash,
   IconX,
@@ -29,6 +31,7 @@ import {
   manageDeclineItem,
   manageDeleteItem,
   manageListItems,
+  manageSetActive,
   manageUpdateItem,
   WishlistApiError,
   type AdminWishItem,
@@ -55,6 +58,7 @@ function notifyError(e: unknown, fallback: string) {
 export function OwnerWishlist() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<AdminWishItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AdminWishItem | null>(null);
   const [formOpen, formHandlers] = useDisclosure(false);
 
   const itemsQuery = useQuery({
@@ -103,8 +107,20 @@ export function OwnerWishlist() {
       else if (action === "decline") await manageDeclineItem(id);
       else await manageDeleteItem(id);
     },
-    onSuccess: () => invalidate(),
+    onSuccess: () => {
+      setDeleteTarget(null);
+      invalidate();
+    },
     onError: (e) => notifyError(e, "Action failed"),
+  });
+
+  const setActiveMut = useMutation({
+    mutationFn: ({ id, active }: { id: string; active: boolean }) => manageSetActive(id, active),
+    onSuccess: (_res, { active }) => {
+      notifications.show({ color: "teal", message: active ? "Item is now visible" : "Item hidden" });
+      invalidate();
+    },
+    onError: (e) => notifyError(e, "Could not update visibility"),
   });
 
   const openCreate = () => {
@@ -167,7 +183,11 @@ export function OwnerWishlist() {
                           <ActionIcon
                             color="teal"
                             variant="light"
-                            loading={actionMut.isPending}
+                            loading={
+                              actionMut.isPending &&
+                              actionMut.variables?.id === item.id &&
+                              actionMut.variables.action === "confirm"
+                            }
                             onClick={() =>
                               actionMut.mutate({
                                 id: item.id,
@@ -182,7 +202,11 @@ export function OwnerWishlist() {
                           <ActionIcon
                             color="orange"
                             variant="light"
-                            loading={actionMut.isPending}
+                            loading={
+                              actionMut.isPending &&
+                              actionMut.variables?.id === item.id &&
+                              actionMut.variables.action === "decline"
+                            }
                             onClick={() =>
                               actionMut.mutate({
                                 id: item.id,
@@ -195,6 +219,32 @@ export function OwnerWishlist() {
                         </Tooltip>
                       </>
                     )}
+                    <Tooltip
+                      label={
+                        item.status === "reserved"
+                          ? "Can't change a reserved item"
+                          : item.isActive
+                            ? "Hide from your wishlist"
+                            : "Show on your wishlist"
+                      }
+                    >
+                      <ActionIcon
+                        variant="default"
+                        loading={
+                          setActiveMut.isPending && setActiveMut.variables?.id === item.id
+                        }
+                        disabled={item.status === "reserved"}
+                        onClick={() =>
+                          setActiveMut.mutate({ id: item.id, active: !item.isActive })
+                        }
+                      >
+                        {item.isActive ? (
+                          <IconEyeOff size={16} />
+                        ) : (
+                          <IconEye size={16} />
+                        )}
+                      </ActionIcon>
+                    </Tooltip>
                     <Tooltip
                       label={
                         item.status === "reserved"
@@ -214,17 +264,18 @@ export function OwnerWishlist() {
                       label={
                         item.status === "reserved"
                           ? "Cannot delete reserved item"
-                          : "Delete"
+                          : item.status === "confirmed"
+                            ? "Gifted items can't be deleted — hide it instead"
+                            : "Delete"
                       }
                     >
                       <ActionIcon
                         color="red"
                         variant="light"
-                        loading={actionMut.isPending}
-                        disabled={item.status === "reserved"}
-                        onClick={() =>
-                          actionMut.mutate({ id: item.id, action: "delete" })
+                        disabled={
+                          item.status === "reserved" || item.status === "confirmed"
                         }
+                        onClick={() => setDeleteTarget(item)}
                       >
                         <IconTrash size={16} />
                       </ActionIcon>
@@ -245,6 +296,7 @@ export function OwnerWishlist() {
         }}
         title={editing ? "Edit item" : "Add item"}
         size="lg"
+        centered
       >
         <ItemForm
           initial={editing ?? undefined}
@@ -260,6 +312,35 @@ export function OwnerWishlist() {
               : createMut.mutate(input)
           }
         />
+      </Modal>
+
+      <Modal
+        opened={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete item"
+        size="sm"
+        centered
+      >
+        <Stack>
+          <Text size="sm">
+            Delete <strong>{deleteTarget?.title}</strong>? This can't be undone.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              loading={actionMut.isPending && actionMut.variables?.action === "delete"}
+              onClick={() =>
+                deleteTarget &&
+                actionMut.mutate({ id: deleteTarget.id, action: "delete" })
+              }
+            >
+              Delete
+            </Button>
+          </Group>
+        </Stack>
       </Modal>
     </Container>
   );

@@ -45,8 +45,8 @@ host's index page renders.
 
 | Method | Path                       | Guard        | Notes |
 | ------ | -------------------------- | ------------ | ----- |
-| GET    | `/items?owner=&cursor=&limit=` | public   | infinite list; keyset cursor over `(position, created_at, id)`; default owner = `WISHLIST_OWNER_ID`. `publicItem()` hides the reserver. |
-| GET    | `/items/:id`               | public       | single item (`publicItem()`) |
+| GET    | `/items?owner=&cursor=&limit=` | public   | infinite list; keyset cursor over `(position, created_at, id)`; default owner = `WISHLIST_OWNER_ID`. `publicItem()` hides the reserver. **Only `is_active` items.** |
+| GET    | `/items/:id`               | public       | single item (`publicItem()`); **404 for an inactive item unless you're the owner** |
 | GET    | `/users/:id`               | public       | a user's public profile (`{ id, name }`; **no email**) — to label whose list it is |
 | GET    | `/me/reservations`         | requireUser  | the caller's own reservations, each with its list `owner` resolved |
 | POST   | `/items/:id/reserve`       | requireUser  | available → reserved; 409 if taken; idempotent for the same user; **400 if it's your own list** |
@@ -54,7 +54,8 @@ host's index page renders.
 | GET    | `/manage/items`            | requireUser  | the caller's **own** list incl. reserver id + name (**no email**) |
 | POST   | `/manage/items`            | requireUser  | create (owner = caller) |
 | PATCH  | `/manage/items/:id`        | requireUser + own | edit (404 if not your item) |
-| DELETE | `/manage/items/:id`        | requireUser + own | delete (404 if not your item) |
+| POST   | `/manage/items/:id/active` | requireUser + own | show/hide (`{ active }`); **409 while reserved** |
+| DELETE | `/manage/items/:id`        | requireUser + own | delete (404 if not your item); **409 if reserved or confirmed — gifted items deactivate instead** |
 | POST   | `/manage/items/:id/confirm`| requireUser + own | reserved → confirmed (gift presented) |
 | POST   | `/manage/items/:id/decline`| requireUser + own | reserved → available (release) |
 
