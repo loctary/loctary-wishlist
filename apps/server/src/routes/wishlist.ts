@@ -47,7 +47,7 @@ async function parseBody<T>(c: Context, schema: z.ZodSchema<T>) {
 
 /** All columns we ever read back. */
 const ITEM_COLUMNS =
-  "id, owner_id, title, description, url, image_url, price, currency, priority, position, status, reserved_by, reserved_at, created_at, updated_at";
+  "id, owner_id, title, description, url, image_url, price, currency, priority, position, status, is_active, reserved_by, reserved_at, created_at, updated_at";
 
 interface ItemRow {
   id: string;
@@ -61,6 +61,7 @@ interface ItemRow {
   priority: number;
   position: number;
   status: "available" | "reserved" | "confirmed" | "declined";
+  is_active: boolean;
   reserved_by: string | null;
   reserved_at: string | null;
   created_at: string;
@@ -93,6 +94,7 @@ function publicItem(row: ItemRow, viewer?: SessionUser | null) {
     priority: row.priority,
     position: row.position,
     status: row.status,
+    isActive: row.is_active,
     createdAt: row.created_at,
     viewer: {
       isOwner,
@@ -138,23 +140,37 @@ function decodeCursor(raw: string): Cursor | null {
   return null;
 }
 
-/** Resolve a set of user ids to email/name/avatar via the auth admin API (deduped). */
+/**
+ * Resolve a set of user ids to name/avatar (deduped). The display name is the
+ * app's own `profiles.display_name` (one batched query), never the auth
+ * `user_metadata`. The avatar still comes from auth metadata (Google etc.).
+ */
 async function resolveUsers(ids: string[]) {
   const unique = [...new Set(ids)];
   const map = new Map<
     string,
-    { id: string; email: string | null; name: string | null; avatarUrl: string | null }
+    { id: string; name: string | null; avatarUrl: string | null }
   >();
+  if (unique.length === 0) return map;
+
+  // Names from profiles — a single batched query.
+  const { data: profiles } = await admin()
+    .from("profiles")
+    .select("id, display_name")
+    .in("id", unique);
+  const names = new Map(
+    (profiles ?? []).map((p) => [p.id as string, (p.display_name as string | null) ?? null]),
+  );
+
   await Promise.all(
     unique.map(async (id) => {
+      // Avatar still lives in auth user_metadata.
       const { data } = await admin().auth.admin.getUserById(id);
-      const u = data?.user;
-      const meta = u?.user_metadata as Record<string, unknown> | undefined;
+      const meta = data?.user?.user_metadata as Record<string, unknown> | undefined;
       const avatar = meta?.avatar_url ?? meta?.picture;
       map.set(id, {
         id,
-        email: u?.email ?? null,
-        name: (meta?.name as string | undefined) ?? null,
+        name: names.get(id) ?? null,
         avatarUrl: typeof avatar === "string" ? avatar : null,
       });
     }),
@@ -180,7 +196,11 @@ const createSchema = z.object({
   currency: z.string().length(3, "Use a 3-letter currency code").optional(),
   priority: z.number().int().optional(),
   position: z.number().int().optional(),
+  isActive: z.boolean().optional(),
 });
+
+/** Body for the dedicated visibility toggle. */
+const activeSchema = z.object({ active: z.boolean() });
 
 // Edit: every field optional; at least one present.
 const editSchema = createSchema.partial().refine((o) => Object.keys(o).length > 0, {
@@ -198,6 +218,7 @@ function toColumns(input: Partial<z.infer<typeof createSchema>>) {
   if (input.currency !== undefined) out.currency = input.currency;
   if (input.priority !== undefined) out.priority = input.priority;
   if (input.position !== undefined) out.position = input.position;
+  if (input.isActive !== undefined) out.is_active = input.isActive;
   return out;
 }
 
@@ -226,6 +247,7 @@ wishlist.get("/items", async (c) => {
     .from("wishlist_items")
     .select(ITEM_COLUMNS)
     .eq("owner_id", owner)
+    .eq("is_active", true) // inactive items are hidden from the public list
     .order("position", { ascending: false })
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
@@ -267,7 +289,11 @@ wishlist.get("/items/:id", async (c) => {
 
   if (error) return fail(c, 500, "Could not load the item");
   if (!data) return fail(c, 404, "Item not found");
-  return c.json({ item: publicItem(data as ItemRow, c.get("user")) });
+  const row = data as ItemRow;
+  const viewer = c.get("user");
+  // Inactive items are hidden from everyone but the owner.
+  if (!row.is_active && row.owner_id !== viewer?.id) return fail(c, 404, "Item not found");
+  return c.json({ item: publicItem(row, viewer) });
 });
 
 /* -------------------------------------------------------------------------- */
@@ -313,6 +339,7 @@ wishlist.post("/items/:id/reserve", requireUser, async (c) => {
 
   const row = existing as ItemRow;
   if (row.owner_id === user.id) return fail(c, 400, "You can't reserve from your own wishlist");
+  if (!row.is_active) return fail(c, 409, "This item is not available");
   if (row.status === "reserved" || row.status === "confirmed") {
     if (row.reserved_by === user.id) return c.json({ item: publicItem(row, user) }); // idempotent
     return fail(c, 409, "This item is already reserved");
@@ -431,15 +458,61 @@ wishlist.patch("/manage/items/:id", requireUser, async (c) => {
 /* DELETE /manage/items/:id  -> delete (only your own item)                    */
 wishlist.delete("/manage/items/:id", requireUser, async (c) => {
   const user = c.get("user")!;
-  const { error, count } = await admin()
-    .from("wishlist_items")
-    .delete({ count: "exact" })
-    .eq("id", c.req.param("id"))
-    .eq("owner_id", user.id); // ownership guard
+  const id = c.req.param("id");
 
+  // Check status first so we can give a precise reason. A gifted (confirmed)
+  // item can't be deleted — the owner deactivates it instead. A reserved item is
+  // mid-gift, so it's locked too.
+  const { data: existing, error: readErr } = await admin()
+    .from("wishlist_items")
+    .select("status")
+    .eq("id", id)
+    .eq("owner_id", user.id) // ownership guard
+    .maybeSingle();
+  if (readErr) return fail(c, 500, "Could not delete the item");
+  if (!existing) return fail(c, 404, "Item not found");
+  if (existing.status === "confirmed")
+    return fail(c, 409, "Gifted items can't be deleted — deactivate it instead");
+  if (existing.status === "reserved") return fail(c, 409, "Can't delete a reserved item");
+
+  const { error } = await admin().from("wishlist_items").delete().eq("id", id).eq("owner_id", user.id);
   if (error) return fail(c, 500, "Could not delete the item");
-  if (!count) return fail(c, 404, "Item not found");
   return c.json({ ok: true });
+});
+
+/* POST /manage/items/:id/active  -> show/hide an item on your own list         */
+/* Body { active }. A reserved item is mid-gift, so its visibility is locked.   */
+wishlist.post("/manage/items/:id/active", requireUser, async (c) => {
+  const user = c.get("user")!;
+  const id = c.req.param("id");
+  const parsed = await parseBody(c, activeSchema);
+  if (!parsed.ok) return fail(c, 400, parsed.error, parsed.fields);
+
+  const { data: existing, error: readErr } = await admin()
+    .from("wishlist_items")
+    .select(ITEM_COLUMNS)
+    .eq("id", id)
+    .eq("owner_id", user.id) // ownership guard
+    .maybeSingle();
+  if (readErr) return fail(c, 500, "Could not update the item");
+  if (!existing) return fail(c, 404, "Item not found");
+  if ((existing as ItemRow).status === "reserved")
+    return fail(c, 409, "Can't change a reserved item's visibility");
+
+  const { data, error } = await admin()
+    .from("wishlist_items")
+    .update({ is_active: parsed.data.active })
+    .eq("id", id)
+    .eq("owner_id", user.id)
+    .neq("status", "reserved") // guard against a race
+    .select(ITEM_COLUMNS)
+    .maybeSingle();
+  if (error || !data) return fail(c, 500, "Could not update the item");
+  const row = data as ItemRow;
+  const reserver = row.reserved_by
+    ? (await resolveUsers([row.reserved_by])).get(row.reserved_by) ?? null
+    : null;
+  return c.json({ item: adminItem(row, reserver) });
 });
 
 /* POST /manage/items/:id/confirm  -> reserved -> confirmed (gift presented)   */

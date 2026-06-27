@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Anchor, Box, Card, Group, Stack, Text, Title } from "@mantine/core";
-import { IconExternalLink, IconGift } from "@tabler/icons-react";
+import { IconExternalLink, IconEyeOff, IconGift } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import type { ItemStatus, WishItem } from "../lib/api";
 import { tintFor } from "../lib/tint";
@@ -42,7 +42,7 @@ export function WishlistCard({
   const badge = STATUS_BADGE[item.status];
   const price = formatPrice(item.price, item.currency);
   const tint = tintFor(item.id);
-  const dim = item.status === "reserved" || item.status === "confirmed";
+  const dim = item.status === "reserved" || item.status === "confirmed" || !item.isActive;
 
   return (
     <Card
@@ -70,6 +70,15 @@ export function WishlistCard({
         {badge && (
           <span className="wl-statebadge" style={{ background: badge.bg, color: badge.color }}>
             {badge.label}
+          </span>
+        )}
+        {/* Owner-only — inactive items never reach the public list. */}
+        {!item.isActive && (
+          <span
+            className="wl-statebadge"
+            style={{ left: 12, right: "auto", background: "var(--text-muted)", color: "#fff" }}
+          >
+            <IconEyeOff size={13} /> Hidden
           </span>
         )}
       </Link>

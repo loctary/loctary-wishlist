@@ -19,7 +19,7 @@ export interface SessionUser {
   id: string;
   email: string | null;
   role: Role;
-  /** Display name from the OAuth metadata, if any. */
+  /** Display name from the `profiles` table, if set. */
   name: string | null;
   /** Profile picture from the OAuth metadata (Google etc.), if any. */
   avatarUrl: string | null;
@@ -31,12 +31,6 @@ function avatarFrom(meta: Record<string, unknown> | null | undefined): string | 
   return typeof url === "string" ? url : null;
 }
 
-/** Pull a display name out of Supabase `user_metadata`. */
-function nameFrom(meta: Record<string, unknown> | null | undefined): string | null {
-  const n = meta?.name ?? meta?.full_name;
-  return typeof n === "string" ? n : null;
-}
-
 /** Hono context variables set by `loadSession`. */
 export interface AppVariables {
   user: SessionUser | null;
@@ -44,13 +38,17 @@ export interface AppVariables {
 
 export type AppContext = Context<{ Variables: AppVariables }>;
 
-async function roleFor(userId: string): Promise<Role> {
+/** The app's source of truth for a user's role + display name. */
+async function profileFor(userId: string): Promise<{ role: Role; name: string | null }> {
   const { data } = await admin()
     .from("profiles")
-    .select("role")
+    .select("role, display_name")
     .eq("id", userId)
     .maybeSingle();
-  return data?.role === "admin" ? "admin" : "user";
+  return {
+    role: data?.role === "admin" ? "admin" : "user",
+    name: (data?.display_name as string | null) ?? null,
+  };
 }
 
 async function resolveSession(c: AppContext): Promise<SessionUser | null> {
@@ -61,11 +59,12 @@ async function resolveSession(c: AppContext): Promise<SessionUser | null> {
   if (accessToken) {
     const { data, error } = await anon().auth.getUser(accessToken);
     if (!error && data.user) {
+      const profile = await profileFor(data.user.id);
       return {
         id: data.user.id,
         email: data.user.email ?? null,
-        role: await roleFor(data.user.id),
-        name: nameFrom(data.user.user_metadata),
+        role: profile.role,
+        name: profile.name,
         avatarUrl: avatarFrom(data.user.user_metadata),
       };
     }
@@ -76,11 +75,12 @@ async function resolveSession(c: AppContext): Promise<SessionUser | null> {
     const { data, error } = await anon().auth.refreshSession({ refresh_token: refreshToken });
     if (!error && data.session && data.user) {
       setSessionCookies(c, data.session);
+      const profile = await profileFor(data.user.id);
       return {
         id: data.user.id,
         email: data.user.email ?? null,
-        role: await roleFor(data.user.id),
-        name: nameFrom(data.user.user_metadata),
+        role: profile.role,
+        name: profile.name,
         avatarUrl: avatarFrom(data.user.user_metadata),
       };
     }

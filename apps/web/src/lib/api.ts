@@ -32,6 +32,8 @@ export interface WishItem {
   priority: number;
   position: number;
   status: ItemStatus;
+  /** Visible on the public list? Inactive items are owner-only. */
+  isActive: boolean;
   createdAt: string;
   viewer: ItemViewerCaps;
 }
@@ -136,6 +138,7 @@ export interface ItemInput {
   currency?: string;
   priority?: number;
   position?: number;
+  isActive?: boolean;
 }
 
 /** The caller's own list (always `owner = caller`), incl. who reserved each item. */
@@ -159,6 +162,14 @@ export function manageUpdateItem(id: string, input: Partial<ItemInput>) {
 
 export function manageDeleteItem(id: string) {
   return request<{ ok: true }>(`/wishlist/manage/items/${id}`, { method: "DELETE" });
+}
+
+/** Show/hide an item on your own list. Rejected (409) while it's reserved. */
+export function manageSetActive(id: string, active: boolean) {
+  return request<{ item: AdminWishItem }>(`/wishlist/manage/items/${id}/active`, {
+    method: "POST",
+    body: JSON.stringify({ active }),
+  });
 }
 
 export function manageConfirmItem(id: string) {

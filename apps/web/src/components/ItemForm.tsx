@@ -3,6 +3,7 @@ import {
   Group,
   NumberInput,
   Stack,
+  Switch,
   Textarea,
   TextInput,
 } from "@mantine/core";
@@ -36,6 +37,7 @@ export function ItemForm({
       currency: initial?.currency ?? "USD",
       priority: initial?.priority ?? 0,
       position: initial?.position ?? 0,
+      isActive: initial?.isActive ?? true,
     },
     validate: {
       title: (v) => (v.trim().length === 0 ? "Title is required" : null),
@@ -54,6 +56,7 @@ export function ItemForm({
       currency: values.currency.trim() || "USD",
       priority: values.priority,
       position: values.position,
+      isActive: values.isActive,
     });
   });
 
@@ -80,6 +83,11 @@ export function ItemForm({
             {...form.getInputProps("position")}
           />
         </Group>
+        <Switch
+          label="Active"
+          description="Inactive items are hidden from your public wishlist"
+          {...form.getInputProps("isActive", { type: "checkbox" })}
+        />
         <Group justify="flex-end" mt="sm">
           {onCancel && (
             <Button variant="default" onClick={onCancel} type="button">
