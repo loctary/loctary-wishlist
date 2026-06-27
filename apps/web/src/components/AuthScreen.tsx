@@ -16,12 +16,13 @@ export function AuthScreen({ page }: { page: AuthRoute }) {
   const { data: session, isLoading } = useSession();
   const router = useRouter();
   const { redirect } = useSearch({ strict: false });
+  const isInitialLoad = isLoading && !session;
 
   useEffect(() => {
-    if (!isLoading && session) router.navigate({ to: redirectTarget(redirect) });
-  }, [isLoading, session, router, redirect]);
+    if (session) router.navigate({ to: redirectTarget(redirect) });
+  }, [session, router, redirect]);
 
-  if (isLoading || session) {
+  if (isInitialLoad || session) {
     return (
       <Center style={{ flex: 1 }}>
         <Loader />

@@ -50,6 +50,7 @@ function groupByOwner(items: ReservedWishItem[]): OwnerGroup[] {
 function ReservedPage() {
   const { data: session, isLoading: sessionLoading } = useSession();
   const router = useRouter();
+  const isInitialSessionLoad = sessionLoading && !session;
 
   // Logged-in only — mirror the ProfileScreen guard.
   useEffect(() => {
@@ -62,7 +63,7 @@ function ReservedPage() {
     enabled: !!session,
   });
 
-  if (sessionLoading || !session) {
+  if (isInitialSessionLoad || !session) {
     return (
       <Center style={{ flex: 1, width: "100%" }}>
         <Loader />

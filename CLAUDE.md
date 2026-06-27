@@ -13,7 +13,7 @@ per-app docs: [apps/web/CLAUDE.md](apps/web/CLAUDE.md),
 loctary-auth owns identity. It sets two HttpOnly cookies on `COOKIE_DOMAIN`
 (`loctary_access_token`, `loctary_refresh_token`). This app **never** sees a
 password: the frontend embeds auth's login/register pages over Module Federation
-and learns auth state via auth's `GET /auth/me`; the backend reads the access
+and learns auth state via auth's federated `authStore`; the backend reads the access
 token cookie and verifies it against Supabase to identify the caller. Both this
 app and auth must share the same `COOKIE_DOMAIN` (`.loctary.com` in prod) so the
 cookie is visible across subdomains.

@@ -34,24 +34,24 @@ carrying the in-progress `email` in the route's `?email=` search param (each aut
 route's `validateSearch`). On success `onAuthenticated` refreshes the session and
 goes home.
 
-## Session & roles
+## Session
 
-`src/lib/session.ts` — the single session source is the **wishlist backend's**
-`GET /wishlist/me`: it reads the shared auth cookie (confirms login) and returns
-the `role` (gates admin UI). `useSession()` is a React Query hook; `useLogout()`
-calls auth's `POST /auth/logout` (auth owns the cookie) then invalidates.
+`src/lib/session.ts` mirrors loctary-auth's federated `./authStore` singleton
+(`GET /auth/me`) with this host's React via `useSyncExternalStore`. Wishlist no
+longer has its own `/wishlist/me` session endpoint; identity data comes from
+auth, while the wishlist backend still verifies cookies for every data request.
+`useLogout()` calls auth's `POST /auth/logout`, clears the auth store, then
+invalidates wishlist queries.
 
 Session is resolved **client-side** (the HttpOnly cookie isn't available to SSR
 fetches from this app). The two guards are mirror images, both client-side (the
 backend re-enforces all authorization regardless): `AuthScreen` wraps the auth
-pages "only when logged **out**" (logged-in → home); `ProfileScreen` wraps
-`/profile` "only when logged **in**" (anonymous → /login).
+pages "only when logged **out**" (logged-in -> home); `ProfileScreen` wraps
+`/profile` "only when logged **in**" (anonymous -> /login).
 
 The header (`src/components/Header.tsx`) reflects session: a **Log in** button
-when logged out, or top-nav links (My wishlist → `/user/$id/wishlist`, Reserved →
-`/reserved`) plus a user-avatar `Menu` (Profile / Log out) when logged in. `role`
-still comes back from the session but no longer gates any menu item — management
-is ownership-based.
+when logged out, or top-nav links (My wishlist -> `/user/$id/wishlist`, Reserved
+-> `/reserved`) plus a user-avatar `Menu` (Profile / Log out) when logged in.
 
 ## Routes (`src/routes/`)
 
@@ -79,9 +79,9 @@ The app shell (`__root.tsx`) is a full-height flex column (header + `flex:1`
   `WishlistApiError` (carries `fields`) on failure.
 - React Query everywhere. Public list cache key `["items", owner]` (owner-scoped;
   `"index"` for the admin default), owner-management `["manage-items"]`, a user's
-  public profile `["user", id]`, reservations `["my-reservations"]`, session
-  `["session"]` — mutations invalidate the ones they affect (`ReserveButton`'s
-  broad `["items"]` matches every owner via prefix).
+  public profile `["user", id]`, and reservations `["my-reservations"]`.
+  Mutations invalidate the ones they affect (`ReserveButton`'s broad `["items"]`
+  matches every owner via prefix).
 
 ## Theme
 

@@ -229,13 +229,6 @@ function toColumns(input: Partial<z.infer<typeof createSchema>>) {
 wishlist.use("*", loadSession);
 
 /* -------------------------------------------------------------------------- */
-/* GET /me  -> the caller's session (id, email, role) or null                  */
-/* The host uses this as its single session source — it both confirms login    */
-/* (via the shared auth cookie) and reports the role for admin gating.         */
-/* -------------------------------------------------------------------------- */
-wishlist.get("/me", (c) => c.json({ user: c.get("user") }));
-
-/* -------------------------------------------------------------------------- */
 /* GET /items  -> public paginated list (infinite, keyset cursor)              */
 /* -------------------------------------------------------------------------- */
 wishlist.get("/items", async (c) => {

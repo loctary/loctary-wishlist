@@ -3,6 +3,7 @@ import { Alert, Box, Center, Loader } from "@mantine/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { loadAuthPageMount } from "../lib/remoteAuth";
+import { setSessionUser } from "../lib/session";
 import { AUTH_PATHS, redirectTarget } from "../lib/authNav";
 import type { AuthMountKey } from "../lib/authTypes";
 
@@ -55,7 +56,8 @@ export function RemoteAuthPage({ page, redirect }: { page: AuthMountKey; redirec
               },
             });
           },
-          onAuthenticated: () => {
+          onAuthenticated: (user) => {
+            setSessionUser(user);
             // The session changed → every cached response was computed for the
             // previous (anonymous) user, incl. per-item `viewer` flags. Invalidate
             // the whole cache so everything refetches for the new user.

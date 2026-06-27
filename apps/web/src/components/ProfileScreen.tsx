@@ -12,12 +12,13 @@ import { RemoteAuthPage } from "./RemoteAuthPage";
 export function ProfileScreen() {
   const { data: session, isLoading } = useSession();
   const router = useRouter();
+  const isInitialLoad = isLoading && !session;
 
   useEffect(() => {
     if (!isLoading && !session) router.navigate({ to: "/login", search: { redirect: "/profile" } });
   }, [isLoading, session, router]);
 
-  if (isLoading || !session) {
+  if (isInitialLoad || !session) {
     return (
       <Center style={{ flex: 1 }}>
         <Loader />

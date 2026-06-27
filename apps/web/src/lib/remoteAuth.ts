@@ -1,4 +1,4 @@
-import type { AuthPageMountFn } from "./authTypes";
+import type { AuthPageMountFn, AuthStore } from "./authTypes";
 
 /**
  * Loads loctary-auth's federated `./mount` entry — client-only.
@@ -42,16 +42,19 @@ async function getContainer(): Promise<MfContainer> {
   return containerPromise;
 }
 
-/** Resolve a federated module's default export (handles factory vs. value). */
-async function loadDefault<T>(name: string): Promise<T> {
+/** Resolve a federated module (handles factory vs. value). */
+async function loadModule<T>(name: string): Promise<T> {
   if (typeof window === "undefined") {
     throw new Error("auth remote modules can only load in the browser");
   }
   const container = await getContainer();
   const factory = await container.get(name);
-  const mod = (typeof factory === "function" ? await (factory as () => unknown)() : factory) as
-    | { default?: T }
-    | T;
+  return (typeof factory === "function" ? await (factory as () => unknown)() : factory) as T;
+}
+
+/** Resolve a federated module's default export (handles factory vs. value). */
+async function loadDefault<T>(name: string): Promise<T> {
+  const mod = (await loadModule(name)) as { default?: T } | T;
   const value = (typeof mod === "function" ? mod : (mod as { default?: T })?.default) as T | undefined;
   if (!value) throw new Error(`Could not load auth remote module "${name}"`);
   return value;
@@ -64,4 +67,11 @@ async function loadDefault<T>(name: string): Promise<T> {
  */
 export function loadAuthPageMount(): Promise<AuthPageMountFn> {
   return loadDefault<AuthPageMountFn>("./mountPage");
+}
+
+/** Load the auth remote's singleton current-user store (`./authStore`). */
+export async function loadAuthStore(): Promise<AuthStore> {
+  const mod = await loadModule<{ authStore?: AuthStore }>("./authStore");
+  if (!mod.authStore) throw new Error('Could not load auth remote module "./authStore"');
+  return mod.authStore;
 }

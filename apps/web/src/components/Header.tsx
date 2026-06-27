@@ -42,6 +42,7 @@ export function AppHeader() {
   const here = useRouterState({ select: (s) => s.location.href });
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
   const [drawerOpened, drawer] = useDisclosure(false);
+  const isInitialSessionLoad = isLoading && !session;
 
   const onLogout = async () => {
     await logout();
@@ -136,7 +137,7 @@ export function AppHeader() {
             )}
           </ActionIcon>
 
-          {isLoading ? null : session ? (
+          {isInitialSessionLoad ? null : session ? (
             <Menu
               position="bottom-end"
               withArrow

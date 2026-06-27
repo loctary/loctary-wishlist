@@ -15,6 +15,21 @@ export interface AuthUser {
   email: string | null;
   name: string | null;
   avatarUrl: string | null;
+  providers: string[];
+}
+
+export interface AuthMeState {
+  user: AuthUser | null;
+  loading: boolean;
+  error?: string;
+}
+
+export interface AuthStore {
+  getSnapshot(): AuthMeState;
+  subscribe(listener: () => void): () => void;
+  refresh(): Promise<AuthUser | null>;
+  invalidate(): Promise<AuthUser | null>;
+  set(user: AuthUser | null): void;
 }
 
 export type AuthRoutes = Partial<Record<AuthRoute, string>>;

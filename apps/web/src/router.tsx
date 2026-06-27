@@ -9,8 +9,8 @@ import { routeTree } from "./routeTree.gen";
  */
 export function getRouter() {
   const queryClient = new QueryClient({
-    // staleTime 0 → lists refetch on mount/navigation so you always see current
-    // data when you come back. The session query opts into its own 30s staleTime.
+    // staleTime 0 -> lists refetch on mount/navigation so you always see current
+    // data when you come back.
     defaultOptions: { queries: { staleTime: 0, retry: 1 } },
   });
 
