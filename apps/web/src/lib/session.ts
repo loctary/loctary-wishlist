@@ -13,6 +13,8 @@ export interface SessionUser {
   id: string;
   email: string | null;
   role: "user" | "admin";
+  name: string | null;
+  avatarUrl: string | null;
 }
 
 export const sessionQueryKey = ["session"] as const;
@@ -44,6 +46,9 @@ export function useLogout() {
     } catch {
       /* ignore — we clear local state regardless */
     }
-    await qc.invalidateQueries({ queryKey: sessionQueryKey });
+    // The session changed → every cached response (lists, item detail, the
+    // per-item `viewer` flags) was computed for the now-logged-out user.
+    // Invalidate the whole cache so it all refetches anonymously.
+    await qc.invalidateQueries();
   };
 }

@@ -2,18 +2,22 @@ import {
   ActionIcon,
   Avatar,
   Box,
+  Burger,
   Button,
+  Drawer,
   Group,
   Menu,
+  NavLink,
+  Stack,
   Text,
   useMantineColorScheme,
 } from "@mantine/core";
+import { useDisclosure } from "@mantine/hooks";
 import {
   IconBookmark,
   IconListCheck,
   IconLogout,
   IconMoon,
-  IconSettings,
   IconSun,
   IconUserCircle,
 } from "@tabler/icons-react";
@@ -35,18 +39,19 @@ export function AppHeader() {
   const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { colorScheme, toggleColorScheme } = useMantineColorScheme();
+  const [drawerOpened, drawer] = useDisclosure(false);
 
   const onLogout = async () => {
     await logout();
     router.navigate({ to: "/" });
   };
 
-  const initial = (session?.email ?? "?").slice(0, 1).toUpperCase();
+  const initial = (session?.name ?? session?.email ?? "?").slice(0, 1).toUpperCase();
 
-  const navLinks = [
-    { to: "/", label: "My wishlist", icon: IconListCheck },
-    { to: "/reserved", label: "Reserved", icon: IconBookmark },
-  ] as const;
+  // "My wishlist" → the caller's own list; active across its item subroutes.
+  const myWishlistActive =
+    !!session && pathname.startsWith(`/user/${session.id}/wishlist`);
+  const reservedActive = pathname === "/reserved";
 
   return (
     <Box
@@ -63,31 +68,53 @@ export function AppHeader() {
       }}
     >
       <Group justify="space-between" maw={1100} mx="auto" wrap="nowrap">
-        <Link to="/" style={{ textDecoration: "none", lineHeight: 0 }}>
-          <Wordmark />
-        </Link>
+        <Group gap="sm" wrap="nowrap">
+          {session && (
+            <Burger
+              opened={drawerOpened}
+              onClick={drawer.toggle}
+              hiddenFrom="xs"
+              size="sm"
+              aria-label="Open navigation"
+            />
+          )}
+          <Link to="/" style={{ textDecoration: "none", lineHeight: 0 }}>
+            <Wordmark />
+          </Link>
+        </Group>
 
         <Group gap="xs" wrap="nowrap">
           {session && (
             <Group gap={4} visibleFrom="xs" wrap="nowrap">
-              {navLinks.map((l) => {
-                const active = pathname === l.to;
-                return (
-                  <Button
-                    key={l.to}
-                    component={Link}
-                    to={l.to}
-                    size="sm"
-                    radius="sm"
-                    color="amber"
-                    variant={active ? "light" : "subtle"}
-                    c={active ? undefined : "var(--text-secondary)"}
-                    leftSection={<l.icon size={17} />}
-                  >
-                    {l.label}
-                  </Button>
-                );
-              })}
+              <Button
+                renderRoot={(props) => (
+                  <Link
+                    to="/user/$userId/wishlist"
+                    params={{ userId: session.id }}
+                    {...props}
+                  />
+                )}
+                size="sm"
+                radius="sm"
+                color="amber"
+                variant={myWishlistActive ? "light" : "subtle"}
+                c={myWishlistActive ? undefined : "var(--text-secondary)"}
+                leftSection={<IconListCheck size={17} />}
+              >
+                My wishlist
+              </Button>
+              <Button
+                component={Link}
+                to="/reserved"
+                size="sm"
+                radius="sm"
+                color="amber"
+                variant={reservedActive ? "light" : "subtle"}
+                c={reservedActive ? undefined : "var(--text-secondary)"}
+                leftSection={<IconBookmark size={17} />}
+              >
+                Reserved
+              </Button>
             </Group>
           )}
 
@@ -98,15 +125,36 @@ export function AppHeader() {
             size="lg"
             aria-label="Toggle color scheme"
             onClick={() => toggleColorScheme()}
+            display="none"
           >
-            {colorScheme === "dark" ? <IconSun size={18} /> : <IconMoon size={18} />}
+            {colorScheme === "dark" ? (
+              <IconSun size={18} />
+            ) : (
+              <IconMoon size={18} />
+            )}
           </ActionIcon>
 
           {isLoading ? null : session ? (
-            <Menu position="bottom-end" withArrow shadow="md" width={220} radius="md">
+            <Menu
+              position="bottom-end"
+              withArrow
+              shadow="md"
+              width={220}
+              radius="md"
+            >
               <Menu.Target>
-                <ActionIcon variant="default" radius="xl" size="lg" aria-label="Account menu">
-                  <Avatar size="sm" radius="xl" color="amber">
+                <ActionIcon
+                  variant="default"
+                  radius="xl"
+                  size="lg"
+                  aria-label="Account menu"
+                >
+                  <Avatar
+                    size="sm"
+                    radius="xl"
+                    color="amber"
+                    src={session.avatarUrl ?? undefined}
+                  >
                     {initial}
                   </Avatar>
                 </ActionIcon>
@@ -114,6 +162,11 @@ export function AppHeader() {
 
               <Menu.Dropdown>
                 <Menu.Label>
+                  {session.name && (
+                    <Text size="sm" fw={600} c="var(--text-primary)" truncate>
+                      {session.name}
+                    </Text>
+                  )}
                   <Text size="xs" truncate>
                     {session.email}
                   </Text>
@@ -124,16 +177,12 @@ export function AppHeader() {
                 >
                   Profile
                 </Menu.Item>
-                {session.role === "admin" && (
-                  <Menu.Item
-                    leftSection={<IconSettings size={16} />}
-                    onClick={() => router.navigate({ to: "/admin" })}
-                  >
-                    Admin
-                  </Menu.Item>
-                )}
                 <Menu.Divider />
-                <Menu.Item color="red" leftSection={<IconLogout size={16} />} onClick={onLogout}>
+                <Menu.Item
+                  color="red"
+                  leftSection={<IconLogout size={16} />}
+                  onClick={onLogout}
+                >
                   Log out
                 </Menu.Item>
               </Menu.Dropdown>
@@ -145,6 +194,41 @@ export function AppHeader() {
           )}
         </Group>
       </Group>
+
+      {session && (
+        <Drawer
+          opened={drawerOpened}
+          onClose={drawer.close}
+          size="xs"
+          padding="md"
+          title={<Wordmark />}
+          hiddenFrom="xs"
+        >
+          <Stack gap={4}>
+            <NavLink
+              label="My wishlist"
+              leftSection={<IconListCheck size={18} />}
+              active={myWishlistActive}
+              renderRoot={(props) => (
+                <Link
+                  to="/user/$userId/wishlist"
+                  params={{ userId: session.id }}
+                  {...props}
+                />
+              )}
+              onClick={drawer.close}
+            />
+            <NavLink
+              component={Link}
+              to="/reserved"
+              label="Reserved"
+              leftSection={<IconBookmark size={18} />}
+              active={reservedActive}
+              onClick={drawer.close}
+            />
+          </Stack>
+        </Drawer>
+      )}
     </Box>
   );
 }

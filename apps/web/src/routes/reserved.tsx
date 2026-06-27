@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import {
-  Box,
   Button,
   Center,
   Container,
@@ -17,7 +16,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { myReservations, type ReservedWishItem } from "../lib/api";
 import { useSession } from "../lib/session";
-import { tintFor } from "../lib/tint";
+import { UserLink } from "../components/UserLink";
 import { WishlistCard } from "../components/WishlistCard";
 
 export const Route = createFileRoute("/reserved")({
@@ -40,7 +39,7 @@ function groupByOwner(items: ReservedWishItem[]): OwnerGroup[] {
     } else {
       map.set(item.owner.id, {
         id: item.owner.id,
-        name: item.owner.name ?? item.owner.email ?? "Someone",
+        name: item.owner.name ?? "Someone",
         items: [item],
       });
     }
@@ -65,7 +64,7 @@ function ReservedPage() {
 
   if (sessionLoading || !session) {
     return (
-      <Center style={{ flex: 1 }}>
+      <Center style={{ flex: 1, width: "100%" }}>
         <Loader />
       </Center>
     );
@@ -76,13 +75,10 @@ function ReservedPage() {
   const total = items.length;
 
   return (
-    <Container size="lg" py="xl">
+    <Container size="lg" py="xl" w="100%">
       <Stack gap="xl">
         <div>
           <Group gap="sm" align="center" wrap="nowrap">
-            <ThemeIcon size={44} radius="xl" variant="light" color="amber">
-              <IconBookmark size={24} />
-            </ThemeIcon>
             <Title order={1} style={{ letterSpacing: "-0.03em" }}>
               Reserved by you
             </Title>
@@ -119,8 +115,8 @@ function ReservedPage() {
                 No reservations yet
               </Text>
               <Text c="dimmed" size="sm">
-                When you reserve a gift on someone's wishlist, it shows up here so you can
-                keep track.
+                When you reserve a gift on someone's wishlist, it shows up here
+                so you can keep track.
               </Text>
               <Button
                 component={Link}
@@ -135,18 +131,16 @@ function ReservedPage() {
         ) : (
           <Stack gap={40}>
             {groups.map((group) => {
-              const tint = tintFor(group.id);
               return (
                 <section key={group.id}>
                   <Group gap="sm" align="center" mb="md" wrap="nowrap">
-                    <Box
-                      className="wl-owner-avatar"
-                      style={{ background: tint.bg, color: tint.fg }}
+                    <Title
+                      order={3}
+                      fw={700}
+                      style={{ letterSpacing: "-0.01em" }}
                     >
-                      {group.name.slice(0, 1).toUpperCase()}
-                    </Box>
-                    <Title order={3} fw={700} style={{ letterSpacing: "-0.01em" }}>
-                      {group.name}'s wishlist
+                      <UserLink id={group.id} name={group.name} inherit />
+                      {"'s wishlist"}
                     </Title>
                     <Text size="sm" c="dimmed" ff="monospace">
                       {group.items.length}

@@ -19,6 +19,22 @@ export interface SessionUser {
   id: string;
   email: string | null;
   role: Role;
+  /** Display name from the OAuth metadata, if any. */
+  name: string | null;
+  /** Profile picture from the OAuth metadata (Google etc.), if any. */
+  avatarUrl: string | null;
+}
+
+/** Pull an avatar URL out of Supabase `user_metadata` (Google sets these). */
+function avatarFrom(meta: Record<string, unknown> | null | undefined): string | null {
+  const url = meta?.avatar_url ?? meta?.picture;
+  return typeof url === "string" ? url : null;
+}
+
+/** Pull a display name out of Supabase `user_metadata`. */
+function nameFrom(meta: Record<string, unknown> | null | undefined): string | null {
+  const n = meta?.name ?? meta?.full_name;
+  return typeof n === "string" ? n : null;
 }
 
 /** Hono context variables set by `loadSession`. */
@@ -49,6 +65,8 @@ async function resolveSession(c: AppContext): Promise<SessionUser | null> {
         id: data.user.id,
         email: data.user.email ?? null,
         role: await roleFor(data.user.id),
+        name: nameFrom(data.user.user_metadata),
+        avatarUrl: avatarFrom(data.user.user_metadata),
       };
     }
   }
@@ -62,6 +80,8 @@ async function resolveSession(c: AppContext): Promise<SessionUser | null> {
         id: data.user.id,
         email: data.user.email ?? null,
         role: await roleFor(data.user.id),
+        name: nameFrom(data.user.user_metadata),
+        avatarUrl: avatarFrom(data.user.user_metadata),
       };
     }
     // Refresh token is dead — clear the stale cookies.

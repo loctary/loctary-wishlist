@@ -48,18 +48,27 @@ pages "only when logged **out**" (logged-in → home); `ProfileScreen` wraps
 `/profile` "only when logged **in**" (anonymous → /login).
 
 The header (`src/components/Header.tsx`) reflects session: a **Log in** button
-when logged out, or a user-avatar `Menu` (Profile / Admin if admin / Log out)
-when logged in.
+when logged out, or top-nav links (My wishlist → `/user/$id/wishlist`, Reserved →
+`/reserved`) plus a user-avatar `Menu` (Profile / Log out) when logged in. `role`
+still comes back from the session but no longer gates any menu item — management
+is ownership-based.
 
 ## Routes (`src/routes/`)
 
 | Route | What |
 | ----- | ---- |
-| `/` | public wishlist of `WISHLIST_OWNER_ID`, infinite scroll (`useInfiniteQuery` → `/wishlist/items`) |
-| `/items/$id` | public single item |
+| `/` | always the admin's wishlist (`WISHLIST_OWNER_ID`) — `WishlistGrid` with no `owner` |
+| `/user/$userId/wishlist` | a user's wishlist (public). Owner → management UI (`OwnerWishlist`: add/edit/delete + confirm/decline, sees the reserver); visitor → reservable `WishlistGrid owner={userId}` |
+| `/user/$userId/wishlist/$itemId` | public single item; states whose list it's on; reserve is hidden for the owner |
+| `/user/$userId` | public user page: display name + link to their wishlist |
+| `/reserved` | the caller's own reservations, grouped by list-owner (logged-in only) |
 | `/login` `/register` `/forgot-password` `/reset-password` `/verify-email` | one embedded auth page each via `AuthScreen page=…` (redirects home if already logged in) |
 | `/profile` | embedded read-only profile via `ProfileScreen` (redirects to /login if logged out) |
-| `/admin` | create/edit/delete + confirm/decline; sees the reserver. Admin-only |
+
+Every user owns a wishlist. The infinite grid lives in
+`src/components/WishlistGrid.tsx` (shared by `/` and the visitor view);
+owner-mode management lives in `src/components/OwnerWishlist.tsx` (the old
+`/admin` page, now keyed off ownership, not the admin role).
 
 The app shell (`__root.tsx`) is a full-height flex column (header + `flex:1`
 `main`), so short pages (auth, profile) center in the viewport.
@@ -68,8 +77,11 @@ The app shell (`__root.tsx`) is a full-height flex column (header + `flex:1`
 
 - `src/lib/api.ts` — typed wishlist client (`credentials: "include"`). Throws
   `WishlistApiError` (carries `fields`) on failure.
-- React Query everywhere. List cache key `["items"]`, admin `["admin-items"]`,
-  session `["session"]` — mutations invalidate the ones they affect.
+- React Query everywhere. Public list cache key `["items", owner]` (owner-scoped;
+  `"index"` for the admin default), owner-management `["manage-items"]`, a user's
+  public profile `["user", id]`, reservations `["my-reservations"]`, session
+  `["session"]` — mutations invalidate the ones they affect (`ReserveButton`'s
+  broad `["items"]` matches every owner via prefix).
 
 ## Theme
 

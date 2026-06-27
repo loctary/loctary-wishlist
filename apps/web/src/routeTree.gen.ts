@@ -16,9 +16,10 @@ import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
-import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ItemsIdRouteImport } from './routes/items.$id'
+import { Route as UserUserIdIndexRouteImport } from './routes/user.$userId.index'
+import { Route as UserUserIdWishlistIndexRouteImport } from './routes/user.$userId.wishlist.index'
+import { Route as UserUserIdWishlistItemIdRouteImport } from './routes/user.$userId.wishlist.$itemId'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
@@ -55,25 +56,30 @@ const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminRoute = AdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ItemsIdRoute = ItemsIdRouteImport.update({
-  id: '/items/$id',
-  path: '/items/$id',
+const UserUserIdIndexRoute = UserUserIdIndexRouteImport.update({
+  id: '/user/$userId/',
+  path: '/user/$userId/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UserUserIdWishlistIndexRoute = UserUserIdWishlistIndexRouteImport.update({
+  id: '/user/$userId/wishlist/',
+  path: '/user/$userId/wishlist/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UserUserIdWishlistItemIdRoute =
+  UserUserIdWishlistItemIdRouteImport.update({
+    id: '/user/$userId/wishlist/$itemId',
+    path: '/user/$userId/wishlist/$itemId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
@@ -81,11 +87,12 @@ export interface FileRoutesByFullPath {
   '/reserved': typeof ReservedRoute
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
-  '/items/$id': typeof ItemsIdRoute
+  '/user/$userId/': typeof UserUserIdIndexRoute
+  '/user/$userId/wishlist/$itemId': typeof UserUserIdWishlistItemIdRoute
+  '/user/$userId/wishlist/': typeof UserUserIdWishlistIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
@@ -93,12 +100,13 @@ export interface FileRoutesByTo {
   '/reserved': typeof ReservedRoute
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
-  '/items/$id': typeof ItemsIdRoute
+  '/user/$userId': typeof UserUserIdIndexRoute
+  '/user/$userId/wishlist/$itemId': typeof UserUserIdWishlistItemIdRoute
+  '/user/$userId/wishlist': typeof UserUserIdWishlistIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/admin': typeof AdminRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/profile': typeof ProfileRoute
@@ -106,13 +114,14 @@ export interface FileRoutesById {
   '/reserved': typeof ReservedRoute
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
-  '/items/$id': typeof ItemsIdRoute
+  '/user/$userId/': typeof UserUserIdIndexRoute
+  '/user/$userId/wishlist/$itemId': typeof UserUserIdWishlistItemIdRoute
+  '/user/$userId/wishlist/': typeof UserUserIdWishlistIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/admin'
     | '/forgot-password'
     | '/login'
     | '/profile'
@@ -120,11 +129,12 @@ export interface FileRouteTypes {
     | '/reserved'
     | '/reset-password'
     | '/verify-email'
-    | '/items/$id'
+    | '/user/$userId/'
+    | '/user/$userId/wishlist/$itemId'
+    | '/user/$userId/wishlist/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/admin'
     | '/forgot-password'
     | '/login'
     | '/profile'
@@ -132,11 +142,12 @@ export interface FileRouteTypes {
     | '/reserved'
     | '/reset-password'
     | '/verify-email'
-    | '/items/$id'
+    | '/user/$userId'
+    | '/user/$userId/wishlist/$itemId'
+    | '/user/$userId/wishlist'
   id:
     | '__root__'
     | '/'
-    | '/admin'
     | '/forgot-password'
     | '/login'
     | '/profile'
@@ -144,12 +155,13 @@ export interface FileRouteTypes {
     | '/reserved'
     | '/reset-password'
     | '/verify-email'
-    | '/items/$id'
+    | '/user/$userId/'
+    | '/user/$userId/wishlist/$itemId'
+    | '/user/$userId/wishlist/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AdminRoute: typeof AdminRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   ProfileRoute: typeof ProfileRoute
@@ -157,7 +169,9 @@ export interface RootRouteChildren {
   ReservedRoute: typeof ReservedRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
-  ItemsIdRoute: typeof ItemsIdRoute
+  UserUserIdIndexRoute: typeof UserUserIdIndexRoute
+  UserUserIdWishlistItemIdRoute: typeof UserUserIdWishlistItemIdRoute
+  UserUserIdWishlistIndexRoute: typeof UserUserIdWishlistIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -211,13 +225,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin': {
-      id: '/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AdminRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -225,11 +232,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/items/$id': {
-      id: '/items/$id'
-      path: '/items/$id'
-      fullPath: '/items/$id'
-      preLoaderRoute: typeof ItemsIdRouteImport
+    '/user/$userId/': {
+      id: '/user/$userId/'
+      path: '/user/$userId'
+      fullPath: '/user/$userId/'
+      preLoaderRoute: typeof UserUserIdIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/user/$userId/wishlist/': {
+      id: '/user/$userId/wishlist/'
+      path: '/user/$userId/wishlist'
+      fullPath: '/user/$userId/wishlist/'
+      preLoaderRoute: typeof UserUserIdWishlistIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/user/$userId/wishlist/$itemId': {
+      id: '/user/$userId/wishlist/$itemId'
+      path: '/user/$userId/wishlist/$itemId'
+      fullPath: '/user/$userId/wishlist/$itemId'
+      preLoaderRoute: typeof UserUserIdWishlistItemIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -237,7 +258,6 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AdminRoute: AdminRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   ProfileRoute: ProfileRoute,
@@ -245,7 +265,9 @@ const rootRouteChildren: RootRouteChildren = {
   ReservedRoute: ReservedRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   VerifyEmailRoute: VerifyEmailRoute,
-  ItemsIdRoute: ItemsIdRoute,
+  UserUserIdIndexRoute: UserUserIdIndexRoute,
+  UserUserIdWishlistItemIdRoute: UserUserIdWishlistItemIdRoute,
+  UserUserIdWishlistIndexRoute: UserUserIdWishlistIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
