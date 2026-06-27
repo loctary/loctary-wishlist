@@ -14,7 +14,7 @@ export function ProfileScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoading && !session) router.navigate({ to: "/login" });
+    if (!isLoading && !session) router.navigate({ to: "/login", search: { redirect: "/profile" } });
   }, [isLoading, session, router]);
 
   if (isLoading || !session) {

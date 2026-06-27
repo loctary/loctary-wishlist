@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 import { Center, Loader } from "@mantine/core";
-import { useRouter } from "@tanstack/react-router";
+import { useRouter, useSearch } from "@tanstack/react-router";
 import { useSession } from "../lib/session";
 import { RemoteAuthPage } from "./RemoteAuthPage";
+import { redirectTarget } from "../lib/authNav";
 import type { AuthRoute } from "../lib/authTypes";
 
 /**
@@ -14,10 +15,11 @@ import type { AuthRoute } from "../lib/authTypes";
 export function AuthScreen({ page }: { page: AuthRoute }) {
   const { data: session, isLoading } = useSession();
   const router = useRouter();
+  const { redirect } = useSearch({ strict: false });
 
   useEffect(() => {
-    if (!isLoading && session) router.navigate({ to: "/" });
-  }, [isLoading, session, router]);
+    if (!isLoading && session) router.navigate({ to: redirectTarget(redirect) });
+  }, [isLoading, session, router, redirect]);
 
   if (isLoading || session) {
     return (
@@ -27,5 +29,5 @@ export function AuthScreen({ page }: { page: AuthRoute }) {
     );
   }
 
-  return <RemoteAuthPage page={page} />;
+  return <RemoteAuthPage page={page} redirect={redirect} />;
 }

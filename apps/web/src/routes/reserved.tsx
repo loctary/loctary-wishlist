@@ -53,7 +53,7 @@ function ReservedPage() {
 
   // Logged-in only — mirror the ProfileScreen guard.
   useEffect(() => {
-    if (!sessionLoading && !session) router.navigate({ to: "/login" });
+    if (!sessionLoading && !session) router.navigate({ to: "/login", search: { redirect: "/reserved" } });
   }, [sessionLoading, session, router]);
 
   const query = useQuery({
