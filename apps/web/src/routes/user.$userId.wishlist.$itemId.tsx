@@ -87,24 +87,24 @@ function ItemPage() {
                   currency: item.currency,
                 }).format(item.price);
           return (
-            <Card withBorder radius="lg" padding="lg" shadow="sm">
+            <Card withBorder radius="lg" padding="lg" shadow="sm" pt={0}>
               <Stack>
                 {item.imageUrl ? (
                   <Card.Section>
                     <Image
+                      className="wl-cover"
                       src={item.imageUrl}
                       alt={item.title}
-                      mah={360}
-                      fit="contain"
+                      fit="cover"
                     />
                   </Card.Section>
                 ) : (
                   <Card.Section
                     style={{
                       background: tint.bg,
-                      height: 220,
                       display: "grid",
                       placeItems: "center",
+                      aspectRatio: "4 / 3",
                     }}
                   >
                     <IconGift size={72} style={{ color: tint.fg }} />
