@@ -13,6 +13,7 @@ export interface SessionUser {
   id: string;
   email: string | null;
   role: "user" | "admin";
+  name: string | null;
   avatarUrl: string | null;
 }
 

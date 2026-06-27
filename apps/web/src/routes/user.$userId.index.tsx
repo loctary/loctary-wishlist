@@ -1,4 +1,14 @@
-import { Avatar, Button, Card, Center, Container, Loader, Stack, Text, Title } from "@mantine/core";
+import {
+  Avatar,
+  Button,
+  Card,
+  Center,
+  Container,
+  Loader,
+  Stack,
+  Text,
+  Title,
+} from "@mantine/core";
 import { IconListCheck } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
@@ -14,10 +24,13 @@ export const Route = createFileRoute("/user/$userId/")({
  */
 function UserPage() {
   const { userId } = Route.useParams();
-  const query = useQuery({ queryKey: ["user", userId], queryFn: () => getUser(userId) });
+  const query = useQuery({
+    queryKey: ["user", userId],
+    queryFn: () => getUser(userId),
+  });
 
   const name = query.data?.user.name;
-  const display = name ?? "Loctary user";
+  const display = name ?? "User without a name"; // fallback for deleted users
   const avatarUrl = query.data?.user.avatarUrl;
 
   return (
@@ -33,13 +46,22 @@ function UserPage() {
       ) : (
         <Card withBorder radius="lg" padding="xl" shadow="sm">
           <Stack align="center" gap="md">
-            <Avatar src={avatarUrl ?? undefined} size={80} radius="xl" color="amber">
+            <Avatar
+              src={avatarUrl ?? undefined}
+              size={80}
+              radius="xl"
+              color="amber"
+            >
               {display.slice(0, 1).toUpperCase()}
             </Avatar>
             <Title order={2}>{display}</Title>
             <Button
               renderRoot={(props) => (
-                <Link to="/user/$userId/wishlist" params={{ userId }} {...props} />
+                <Link
+                  to="/user/$userId/wishlist"
+                  params={{ userId }}
+                  {...props}
+                />
               )}
               leftSection={<IconListCheck size={16} />}
             >

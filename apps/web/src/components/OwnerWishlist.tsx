@@ -10,7 +10,6 @@ import {
   SimpleGrid,
   Stack,
   Text,
-  ThemeIcon,
   Title,
   Tooltip,
 } from "@mantine/core";
@@ -19,7 +18,6 @@ import { notifications } from "@mantine/notifications";
 import {
   IconCheck,
   IconEdit,
-  IconListCheck,
   IconPlus,
   IconTrash,
   IconX,
@@ -124,9 +122,6 @@ export function OwnerWishlist() {
     <Container size="lg" py="xl" w="100%">
       <Group justify="space-between" mb="xl" wrap="nowrap">
         <Group gap="md" align="center" wrap="nowrap">
-          <ThemeIcon size={60} radius="xl" variant="light" color="moss">
-            <IconListCheck size={30} />
-          </ThemeIcon>
           <div>
             <Title order={1} style={{ letterSpacing: "-0.03em" }}>
               Your wishlist
@@ -200,19 +195,33 @@ export function OwnerWishlist() {
                         </Tooltip>
                       </>
                     )}
-                    <Tooltip label="Edit">
+                    <Tooltip
+                      label={
+                        item.status === "reserved"
+                          ? "Cannot edit reserved item"
+                          : "Edit"
+                      }
+                    >
                       <ActionIcon
                         variant="default"
                         onClick={() => openEdit(item)}
+                        disabled={item.status === "reserved"}
                       >
                         <IconEdit size={16} />
                       </ActionIcon>
                     </Tooltip>
-                    <Tooltip label="Delete">
+                    <Tooltip
+                      label={
+                        item.status === "reserved"
+                          ? "Cannot delete reserved item"
+                          : "Delete"
+                      }
+                    >
                       <ActionIcon
                         color="red"
                         variant="light"
                         loading={actionMut.isPending}
+                        disabled={item.status === "reserved"}
                         onClick={() =>
                           actionMut.mutate({ id: item.id, action: "delete" })
                         }

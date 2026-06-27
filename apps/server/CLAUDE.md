@@ -14,7 +14,7 @@ shared `COOKIE_DOMAIN` (`loctary_access_token`, `loctary_refresh_token`).
 refresh token when the access token has expired (this Worker is on the same
 cookie domain, so it may re-set them). The user's role comes from `profiles`.
 
-- `loadSession` — always-on; stashes `{ id, email, role } | null` on the context.
+- `loadSession` — always-on; stashes `{ id, email, role, name, avatarUrl } | null` on the context.
 - `requireUser` — 401 if no session.
 - `requireAdmin` — 403 if `role !== 'admin'` (still defined; no longer used by
   any route — management is **ownership-based**, see below).

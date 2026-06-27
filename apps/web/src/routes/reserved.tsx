@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import {
-  Box,
   Button,
   Center,
   Container,
@@ -17,7 +16,6 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { myReservations, type ReservedWishItem } from "../lib/api";
 import { useSession } from "../lib/session";
-import { tintFor } from "../lib/tint";
 import { UserLink } from "../components/UserLink";
 import { WishlistCard } from "../components/WishlistCard";
 
@@ -81,9 +79,6 @@ function ReservedPage() {
       <Stack gap="xl">
         <div>
           <Group gap="sm" align="center" wrap="nowrap">
-            <ThemeIcon size={44} radius="xl" variant="light" color="amber">
-              <IconBookmark size={24} />
-            </ThemeIcon>
             <Title order={1} style={{ letterSpacing: "-0.03em" }}>
               Reserved by you
             </Title>
@@ -136,16 +131,9 @@ function ReservedPage() {
         ) : (
           <Stack gap={40}>
             {groups.map((group) => {
-              const tint = tintFor(group.id);
               return (
                 <section key={group.id}>
                   <Group gap="sm" align="center" mb="md" wrap="nowrap">
-                    <Box
-                      className="wl-owner-avatar"
-                      style={{ background: tint.bg, color: tint.fg }}
-                    >
-                      {group.name.slice(0, 1).toUpperCase()}
-                    </Box>
                     <Title
                       order={3}
                       fw={700}

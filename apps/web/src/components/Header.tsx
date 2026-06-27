@@ -46,7 +46,7 @@ export function AppHeader() {
     router.navigate({ to: "/" });
   };
 
-  const initial = (session?.email ?? "?").slice(0, 1).toUpperCase();
+  const initial = (session?.name ?? session?.email ?? "?").slice(0, 1).toUpperCase();
 
   // "My wishlist" → the caller's own list; active across its item subroutes.
   const myWishlistActive =
@@ -162,6 +162,11 @@ export function AppHeader() {
 
               <Menu.Dropdown>
                 <Menu.Label>
+                  {session.name && (
+                    <Text size="sm" fw={600} c="var(--text-primary)" truncate>
+                      {session.name}
+                    </Text>
+                  )}
                   <Text size="xs" truncate>
                     {session.email}
                   </Text>
