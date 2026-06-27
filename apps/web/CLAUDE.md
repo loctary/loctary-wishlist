@@ -41,6 +41,12 @@ goes home.
 the `role` (gates admin UI). `useSession()` is a React Query hook; `useLogout()`
 calls auth's `POST /auth/logout` (auth owns the cookie) then invalidates.
 
+Edits made **inside the embedded auth widget** (e.g. changing name/avatar on the
+profile page) have no host callback, so `RemoteAuthPage` subscribes to the auth
+remote's federated **`./authStore`** (loaded via `loadAuthStore()` in
+`remoteAuth.ts` — the same singleton the widget mutates). When it changes we
+invalidate `["session"]`, so the header refetches `/wishlist/me` and updates live.
+
 Session is resolved **client-side** (the HttpOnly cookie isn't available to SSR
 fetches from this app). The two guards are mirror images, both client-side (the
 backend re-enforces all authorization regardless): `AuthScreen` wraps the auth

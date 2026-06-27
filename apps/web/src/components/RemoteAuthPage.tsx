@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { Alert, Box, Center, Loader } from "@mantine/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { loadAuthPageMount } from "../lib/remoteAuth";
+import { loadAuthPageMount, loadAuthStore } from "../lib/remoteAuth";
+import { sessionQueryKey } from "../lib/session";
 import { AUTH_PATHS, redirectTarget } from "../lib/authNav";
-import type { AuthMountKey } from "../lib/authTypes";
+import type { AuthMountKey, AuthUser } from "../lib/authTypes";
 
 /**
  * Mounts ONE loctary-auth page (`page`) into a div via the remote's imperative
@@ -73,6 +74,39 @@ export function RemoteAuthPage({ page, redirect }: { page: AuthMountKey; redirec
       unmount?.();
     };
   }, [page, redirect, router, queryClient]);
+
+  // Reflect edits made inside the embedded widget (e.g. the profile page changing
+  // name/avatar): the auth remote's authStore is the same singleton the widget
+  // updates, so when the user actually changes we refetch the host session
+  // (/wishlist/me) and the header etc. update live — no manual wiring per action.
+  useEffect(() => {
+    let unsub: (() => void) | undefined;
+    let cancelled = false;
+    // Key on the user's identity + the fields the host shows, so we ignore the
+    // store's transient "loading" emits and no-op refetches (only invalidate on a
+    // real change). Baseline is the snapshot at subscribe time → no missed edits
+    // regardless of whether the initial /auth/me load has resolved yet.
+    const keyOf = (s: { user: AuthUser | null }) =>
+      s.user ? `${s.user.id}|${s.user.name ?? ""}|${s.user.avatarUrl ?? ""}` : "anon";
+    loadAuthStore()
+      .then((store) => {
+        if (cancelled) return;
+        let last = keyOf(store.getSnapshot());
+        unsub = store.subscribe(() => {
+          const key = keyOf(store.getSnapshot());
+          if (key === last) return;
+          last = key;
+          void queryClient.invalidateQueries({ queryKey: sessionQueryKey });
+        });
+      })
+      .catch(() => {
+        /* auth remote unreachable — the mount above already surfaces that */
+      });
+    return () => {
+      cancelled = true;
+      unsub?.();
+    };
+  }, [queryClient]);
 
   if (error) {
     return (
