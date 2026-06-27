@@ -1,4 +1,4 @@
-import type { AuthPageMountFn } from "./authTypes";
+import type { AuthPageMountFn, AuthUser } from "./authTypes";
 
 /**
  * Loads loctary-auth's federated `./mount` entry — client-only.
@@ -64,4 +64,38 @@ async function loadDefault<T>(name: string): Promise<T> {
  */
 export function loadAuthPageMount(): Promise<AuthPageMountFn> {
   return loadDefault<AuthPageMountFn>("./mountPage");
+}
+
+/**
+ * The auth remote's shared current-user store (`GET /auth/me`). It is the SAME
+ * singleton the embedded profile widget mutates, so subscribing here lets the
+ * host react to profile edits (name/avatar) made inside the widget — see
+ * `RemoteAuthPage`. Framework-agnostic on purpose (this remote shares no React);
+ * the host drives it with plain `subscribe`/`getSnapshot`.
+ */
+export interface RemoteAuthState {
+  user: AuthUser | null;
+  loading: boolean;
+  error?: string;
+}
+export interface RemoteAuthStore {
+  getSnapshot(): RemoteAuthState;
+  subscribe(listener: () => void): () => void;
+  refresh(): Promise<AuthUser | null>;
+  invalidate(): Promise<AuthUser | null>;
+  set(user: AuthUser | null): void;
+}
+
+/** Load the auth remote's `./authStore` (named export) — client-only. */
+export async function loadAuthStore(): Promise<RemoteAuthStore> {
+  if (typeof window === "undefined") {
+    throw new Error("auth remote modules can only load in the browser");
+  }
+  const container = await getContainer();
+  const factory = await container.get("./authStore");
+  const mod = (typeof factory === "function" ? await (factory as () => unknown)() : factory) as {
+    authStore?: RemoteAuthStore;
+  };
+  if (!mod?.authStore) throw new Error('Could not load auth remote module "./authStore"');
+  return mod.authStore;
 }
