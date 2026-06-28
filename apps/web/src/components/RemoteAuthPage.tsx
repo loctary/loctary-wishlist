@@ -1,26 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import { Alert, Box, Center, Loader } from "@mantine/core";
-import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { loadAuthPageMount, loadAuthStore } from "../lib/remoteAuth";
-import { sessionQueryKey } from "../lib/session";
 import { AUTH_PATHS, redirectTarget } from "../lib/authNav";
-import type { AuthMountKey, AuthUser } from "../lib/authTypes";
+import type { AuthMountKey } from "../lib/authTypes";
 
 /**
  * Mounts ONE loctary-auth page (`page`) into a div via the remote's imperative
  * `./mountPage` entry. Client-only: the MF runtime + the remote's own React run
  * in the browser, so nothing here executes during SSR.
  *
- * Unlike the old whole-`AuthApp` embed, links between auth screens are wired to
- * the HOST router: `onNavigate` pushes the matching host route (carrying any
- * `email` in the query), so each screen is its own URL and its own mount. On
- * success we refresh the session and send the user home.
+ * Inter-screen links are wired to the HOST router via `onNavigate`. On
+ * successful auth we refresh the federated `authStore` — host `useSession`
+ * subscribers (header, guards) re-render automatically; profile edits made
+ * inside the embedded widget propagate the same way without any wiring here.
  */
 export function RemoteAuthPage({ page, redirect }: { page: AuthMountKey; redirect?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
@@ -57,10 +54,10 @@ export function RemoteAuthPage({ page, redirect }: { page: AuthMountKey; redirec
             });
           },
           onAuthenticated: () => {
-            // The session changed → every cached response was computed for the
-            // previous (anonymous) user, incl. per-item `viewer` flags. Invalidate
-            // the whole cache so everything refetches for the new user.
-            queryClient.invalidateQueries();
+            // The login/register pages don't write to the federated `authStore`
+            // (only the profile page does). Refresh it so the header reflects
+            // the new identity immediately, then navigate home.
+            void loadAuthStore().then((s) => s.refresh());
             router.navigate({ to: target });
           },
         });
@@ -73,40 +70,7 @@ export function RemoteAuthPage({ page, redirect }: { page: AuthMountKey; redirec
       cancelled = true;
       unmount?.();
     };
-  }, [page, redirect, router, queryClient]);
-
-  // Reflect edits made inside the embedded widget (e.g. the profile page changing
-  // name/avatar): the auth remote's authStore is the same singleton the widget
-  // updates, so when the user actually changes we refetch the host session
-  // (/wishlist/me) and the header etc. update live — no manual wiring per action.
-  useEffect(() => {
-    let unsub: (() => void) | undefined;
-    let cancelled = false;
-    // Key on the user's identity + the fields the host shows, so we ignore the
-    // store's transient "loading" emits and no-op refetches (only invalidate on a
-    // real change). Baseline is the snapshot at subscribe time → no missed edits
-    // regardless of whether the initial /auth/me load has resolved yet.
-    const keyOf = (s: { user: AuthUser | null }) =>
-      s.user ? `${s.user.id}|${s.user.name ?? ""}|${s.user.avatarUrl ?? ""}` : "anon";
-    loadAuthStore()
-      .then((store) => {
-        if (cancelled) return;
-        let last = keyOf(store.getSnapshot());
-        unsub = store.subscribe(() => {
-          const key = keyOf(store.getSnapshot());
-          if (key === last) return;
-          last = key;
-          void queryClient.invalidateQueries({ queryKey: sessionQueryKey });
-        });
-      })
-      .catch(() => {
-        /* auth remote unreachable — the mount above already surfaces that */
-      });
-    return () => {
-      cancelled = true;
-      unsub?.();
-    };
-  }, [queryClient]);
+  }, [page, redirect, router]);
 
   if (error) {
     return (

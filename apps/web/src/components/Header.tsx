@@ -35,7 +35,7 @@ function Wordmark() {
 }
 
 export function AppHeader() {
-  const { data: session, isLoading } = useSession();
+  const { user: session, loading: isLoading } = useSession();
   const logout = useLogout();
   const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -136,6 +136,14 @@ export function AppHeader() {
             )}
           </ActionIcon>
 
+          {/* Fixed-size slot so the header doesn't jump when the session
+              resolves (empty during the auth-store bootstrap, then either an
+              avatar ActionIcon or a Log-in Button — different widths/heights). */}
+          <Box
+            mih={38}
+            miw={92}
+            style={{ display: "flex", alignItems: "center", justifyContent: "flex-end" }}
+          >
           {isLoading ? null : session ? (
             <Menu
               position="bottom-end"
@@ -194,6 +202,7 @@ export function AppHeader() {
               Log in
             </Button>
           )}
+          </Box>
         </Group>
       </Group>
 

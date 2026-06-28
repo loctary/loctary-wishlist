@@ -13,7 +13,7 @@ import { WishlistGrid } from "./WishlistGrid";
  * the index (which passes the `WISHLIST_OWNER_ID` from env).
  */
 export function WishlistView({ userId }: { userId: string }) {
-  const { data: session } = useSession();
+  const { user: session } = useSession();
 
   if (session?.id === userId) return <OwnerWishlist />;
 

@@ -36,28 +36,32 @@ goes home.
 
 ## Session & roles
 
-`src/lib/session.ts` — the single session source is the **wishlist backend's**
-`GET /wishlist/me`: it reads the shared auth cookie (confirms login) and returns
-the `role` (gates admin UI). `useSession()` is a React Query hook; `useLogout()`
-calls auth's `POST /auth/logout` (auth owns the cookie) then invalidates.
+`src/lib/session.ts` — the single session source is the auth remote's federated
+**`./authStore`** (loaded via `loadAuthStore()` in `remoteAuth.ts`). It is the
+same singleton the embedded profile widget mutates on every edit, so subscribing
+through `useSession()` (a 3-line `useSyncExternalStore` wrapper) means
+name/avatar changes propagate to the header live — no `/wishlist/me` round-trip,
+no React-Query invalidate. `useLogout()` calls auth's `POST /auth/logout` (auth
+owns the cookie), then clears + refreshes the store.
 
-Edits made **inside the embedded auth widget** (e.g. changing name/avatar on the
-profile page) have no host callback, so `RemoteAuthPage` subscribes to the auth
-remote's federated **`./authStore`** (loaded via `loadAuthStore()` in
-`remoteAuth.ts` — the same singleton the widget mutates). When it changes we
-invalidate `["session"]`, so the header refetches `/wishlist/me` and updates live.
+The wishlist backend still enforces authorization (every mutation re-checks
+ownership); the host only needs the auth uuid to drive its UI, which the
+authStore already returns. The host has no `/me` endpoint of its own.
 
-Session is resolved **client-side** (the HttpOnly cookie isn't available to SSR
-fetches from this app). The two guards are mirror images, both client-side (the
-backend re-enforces all authorization regardless): `AuthScreen` wraps the auth
-pages "only when logged **out**" (logged-in → home); `ProfileScreen` wraps
-`/profile` "only when logged **in**" (anonymous → /login).
+Session is resolved **client-side** (the auth remote loads in the browser; SSR
+returns `{ user: null, loading: true }`). The two guards are mirror images,
+both client-side: `AuthScreen` wraps the auth pages "only when logged **out**"
+(logged-in → home); `ProfileScreen` wraps `/profile` "only when logged **in**"
+(anonymous → /login). Both keep `RemoteAuthPage` mounted once the user is seen
+— a background `authStore.invalidate()` flipping `loading` back to true must
+not tear the embedded page down, or the remote's mount-time `invalidate()`
+re-fires → infinite loop.
 
 The header (`src/components/Header.tsx`) reflects session: a **Log in** button
 when logged out, or top-nav links (My wishlist → `/user/$id/wishlist`, Reserved →
-`/reserved`) plus a user-avatar `Menu` (Profile / Log out) when logged in. `role`
-still comes back from the session but no longer gates any menu item — management
-is ownership-based.
+`/reserved`) plus a user-avatar `Menu` (Profile / Log out) when logged in. The
+host no longer reads `role` — every gate left in the UI is ownership-based and
+the backend enforces the rest.
 
 ## Routes (`src/routes/`)
 
