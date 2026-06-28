@@ -66,5 +66,10 @@ export function redirectTarget(redirect: string | undefined): string {
 
 /** Search params for sending the current page to `/login` and back. */
 export function loginSearch(from: string): AuthSearch {
-  return isSafeRedirect(from) ? { redirect: from } : {};
+  if (!isSafeRedirect(from)) return {};
+  // The default post-auth target is "/" already — don't round-trip it through
+  // the URL just to land on the same page.
+  const pathname = from.split(/[?#]/, 1)[0];
+  if (pathname === "/") return {};
+  return { redirect: from };
 }

@@ -34,7 +34,7 @@ const STATUS: Record<ItemStatus, { color: string; label: string } | null> = {
 
 function ItemPage() {
   const { userId, itemId } = Route.useParams();
-  const { data: session } = useSession();
+  const { user: session } = useSession();
   const query = useQuery({
     queryKey: ["item", itemId],
     queryFn: () => getItem(itemId),

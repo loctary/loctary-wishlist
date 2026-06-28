@@ -6,18 +6,25 @@ import { RemoteAuthPage } from "./RemoteAuthPage";
 
 /**
  * The profile route, guarded as "only when logged in" — the mirror of
- * `AuthScreen`. Anonymous visitors are bounced to /login. The check is
- * client-side (the session cookie isn't available to SSR fetches here).
+ * `AuthScreen`. Anonymous visitors are bounced to /login. Profile edits made
+ * inside the embedded widget propagate to the rest of the host automatically:
+ * the widget and `useSession` subscribe to the same federated `authStore`.
+ *
+ * Loader is shown ONLY on the initial bootstrap (no user yet). Once a user is
+ * seen we keep `RemoteAuthPage` mounted across background `authStore.invalidate()`
+ * refreshes — otherwise the remote ProfilePage's mount-time `invalidate()` flips
+ * the store's `loading` back to `true`, we'd unmount the remote, then mount it
+ * again on resolution → it calls `invalidate()` again → infinite loop.
  */
 export function ProfileScreen() {
-  const { data: session, isLoading } = useSession();
+  const { user, loading } = useSession();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoading && !session) router.navigate({ to: "/login", search: { redirect: "/profile" } });
-  }, [isLoading, session, router]);
+    if (!loading && !user) router.navigate({ to: "/login", search: { redirect: "/profile" } });
+  }, [loading, user, router]);
 
-  if (isLoading || !session) {
+  if (!user) {
     return (
       <Center style={{ flex: 1 }}>
         <Loader />

@@ -15,6 +15,8 @@ export interface AuthUser {
   email: string | null;
   name: string | null;
   avatarUrl: string | null;
+  /** Sign-in methods linked to the account, e.g. ["google","email"]. */
+  providers: string[];
 }
 
 export type AuthRoutes = Partial<Record<AuthRoute, string>>;

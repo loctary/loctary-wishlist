@@ -48,7 +48,7 @@ function groupByOwner(items: ReservedWishItem[]): OwnerGroup[] {
 }
 
 function ReservedPage() {
-  const { data: session, isLoading: sessionLoading } = useSession();
+  const { user: session, loading: sessionLoading } = useSession();
   const router = useRouter();
 
   // Logged-in only — mirror the ProfileScreen guard.

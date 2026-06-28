@@ -16,7 +16,7 @@ import { loginSearch } from "../lib/authNav";
  * (the backend enforces ownership).
  */
 export function ReserveButton({ item, onChange }: { item: WishItem; onChange?: (next: WishItem) => void }) {
-  const { data: session } = useSession();
+  const { user: session } = useSession();
   const router = useRouter();
   const here = useRouterState({ select: (s) => s.location.href });
   const queryClient = useQueryClient();
