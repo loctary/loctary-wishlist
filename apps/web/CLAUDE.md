@@ -80,8 +80,40 @@ Every user owns a wishlist. The infinite grid lives in
 owner-mode management lives in `src/components/OwnerWishlist.tsx` (the old
 `/admin` page, now keyed off ownership, not the admin role).
 
+The owner-side toolset (approve / cancel reservation, hide/show, edit, delete,
+plus the reserver line) is a single component `src/components/OwnerItemActions.tsx`,
+used both as each `WishlistCard` footer in `OwnerWishlist` *and* on the item
+detail page when the viewer is the owner. The detail page pulls the admin
+projection it needs from the shared `["manage-items"]` cache (instant if the
+user came from their wishlist, otherwise one extra fetch). `OwnerWishlist`
+itself now only owns the "Add item" flow — every per-item action is delegated
+to the shared component.
+
 The app shell (`__root.tsx`) is a full-height flex column (header + `flex:1`
 `main`), so short pages (auth, profile) center in the viewport.
+
+## Item images
+
+Each item carries up to 3 image URLs (`item.images: string[]`, ordered, index 0
+is the cover) served from R2. The card cover and the item detail page render an
+`ImageCarousel` (a CSS scroll-snap track with hover arrows; preview at index 0)
+— the empty state falls back to the existing tinted gift icon.
+
+The `ItemForm` Add/Edit modal manages images inline, after Description: a 3-up
+grid of 4:3 thumbnails with a dashed "Select image" placeholder of the same
+size while there's room. Clicking it opens `ImageCropperModal`: pick → 4:3
+crop via `react-easy-crop` → `getCroppedItemImage` (`src/lib/cropImage.ts`)
+compresses to WebP ≤300KB → `uploadImage` POSTs raw bytes to the staging
+endpoint and returns a URL, which the form pushes into local state. Submit
+sends the whole `images: string[]` with the item. If the user closes the
+modal without submitting, the staged R2 objects are reaped by the server's
+nightly orphan-cleanup cron (24h grace).
+
+The "Product URL" field was dropped — the image carries the visual; an
+external store link added little. The "Priority"/"Position" pair was merged
+into a single "Priority" field — it maps to the table's `position` column
+(the actual sort key); `priority` was dropped (migration 0003). The
+`wishlist_item_images` side-table was replaced by an inline `text[]` (0004).
 
 ## Data layer
 

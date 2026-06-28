@@ -25,16 +25,16 @@ export interface WishItem {
   ownerId: string;
   title: string;
   description: string | null;
-  url: string | null;
-  imageUrl: string | null;
   price: number | null;
   currency: string;
-  priority: number;
+  /** Sort key — UI labels this "Priority". */
   position: number;
   status: ItemStatus;
   /** Visible on the public list? Inactive items are owner-only. */
   isActive: boolean;
   createdAt: string;
+  /** Up to 3 ordered image URLs. Index 0 is the card cover / carousel preview. */
+  images: string[];
   viewer: ItemViewerCaps;
 }
 
@@ -132,13 +132,13 @@ export function myReservations() {
 export interface ItemInput {
   title: string;
   description?: string | null;
-  url?: string | null;
-  imageUrl?: string | null;
   price?: number | null;
   currency?: string;
-  priority?: number;
+  /** Sort key — UI labels this "Priority". */
   position?: number;
   isActive?: boolean;
+  /** Up to 3 image URLs (must already be uploaded via `uploadImage`). */
+  images?: string[];
 }
 
 /** The caller's own list (always `owner = caller`), incl. who reserved each item. */
@@ -178,4 +178,27 @@ export function manageConfirmItem(id: string) {
 
 export function manageDeclineItem(id: string) {
   return request<{ item: AdminWishItem }>(`/wishlist/manage/items/${id}/decline`, { method: "POST" });
+}
+
+/* ---------------------------- images ----------------------------- */
+
+/**
+ * Stage one cropped+compressed image (≤300KB) to R2 and get a public URL back.
+ * The url isn't yet attached to any item — the caller stores it in the form's
+ * local `images` state and submits it with the item. Images uploaded but never
+ * attached are removed by the nightly orphan-cleanup cron.
+ */
+export async function uploadImage(blob: Blob): Promise<{ url: string }> {
+  const res = await fetch(`${API}/wishlist/manage/images/upload`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": blob.type },
+    body: blob,
+  });
+  const payload = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok) {
+    const body = payload as Partial<ApiError>;
+    throw new WishlistApiError(body.error ?? "Could not upload the image", res.status, body.fields);
+  }
+  return payload as { url: string };
 }

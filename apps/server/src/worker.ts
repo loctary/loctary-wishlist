@@ -3,7 +3,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { getEnv } from "./env.js";
 import type { AppVariables } from "./auth.js";
-import wishlistRoutes from "./routes/wishlist.js";
+import wishlistRoutes, { cleanupOrphanImages } from "./routes/wishlist.js";
 
 /**
  * Cloudflare Workers entry. Same Hono app as the Node server (`index.ts`), but:
@@ -47,4 +47,25 @@ app.onError((err, c) => {
   return c.json({ error: "Internal server error" }, 500);
 });
 
-export default app;
+/**
+ * Default export wraps the Hono app so we can also expose `scheduled()` —
+ * Cloudflare's cron entry point. The trigger (`crons = [...]` in wrangler.toml)
+ * invokes this without an HTTP request, so we must first bridge the Worker
+ * bindings into `process.env` ourselves (the request middleware above doesn't
+ * fire here).
+ */
+export default {
+  fetch: app.fetch,
+  async scheduled(_event: unknown, bindings: Record<string, unknown>, ctx: { waitUntil: (p: Promise<unknown>) => void }) {
+    for (const [key, value] of Object.entries(bindings ?? {})) {
+      if (typeof value === "string" && process.env[key] === undefined) {
+        process.env[key] = value;
+      }
+    }
+    ctx.waitUntil(
+      cleanupOrphanImages()
+        .then((r) => console.log("[cron] orphan-images cleanup", r))
+        .catch((e) => console.error("[cron] orphan-images cleanup failed", e)),
+    );
+  },
+};

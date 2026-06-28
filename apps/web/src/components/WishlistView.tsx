@@ -24,6 +24,9 @@ function VisitorWishlist({ userId }: { userId: string }) {
   const userQuery = useQuery({
     queryKey: ["user", userId],
     queryFn: () => getUser(userId),
+    // Display name + avatar don't change as a side effect of anything else in
+    // this app — fetch once per session and don't refetch on focus/remount.
+    staleTime: Infinity,
   });
 
   // Don't render a half-built page with a placeholder name — show a full-page

@@ -41,7 +41,8 @@ host's index page renders.
 | `src/supabase.ts`       | `anon()` (verify/refresh tokens) and `admin()` (service-role; all data + role lookup). |
 | `src/cookies.ts`        | Read/set/clear the session cookies. Names must match loctary-auth. |
 | `src/auth.ts`           | Session verification + `requireUser` / `requireAdmin` guards.     |
-| `src/routes/wishlist.ts`| All endpoints. Zod-validated, `fail()` error contract.            |
+| `src/routes/wishlist.ts`| All endpoints. Zod-validated, `fail()` error contract. Also exports `cleanupOrphanImages()` for the cron. |
+| `src/r2.ts`             | Cloudflare R2 via aws4fetch (S3 API). Mirrors auth's `r2.ts`; adds `listObjects()` for the nightly cleanup. |
 
 ## Endpoints (under `/wishlist`)
 
@@ -55,11 +56,30 @@ host's index page renders.
 | DELETE | `/items/:id/reserve`       | requireUser  | cancel own reservation (only while `reserved`) → available |
 | GET    | `/manage/items`            | requireUser  | the caller's **own** list incl. reserver id + name (**no email**) |
 | POST   | `/manage/items`            | requireUser  | create (owner = caller) |
-| PATCH  | `/manage/items/:id`        | requireUser + own | edit (404 if not your item) |
+| PATCH  | `/manage/items/:id`        | requireUser + own | edit (404 if not your item; **409 while reserved or confirmed** — gifted items are closed) |
 | POST   | `/manage/items/:id/active` | requireUser + own | show/hide (`{ active }`); **409 while reserved** |
 | DELETE | `/manage/items/:id`        | requireUser + own | delete (404 if not your item); **409 if reserved or confirmed — gifted items deactivate instead** |
 | POST   | `/manage/items/:id/confirm`| requireUser + own | reserved → confirmed (gift presented) |
 | POST   | `/manage/items/:id/decline`| requireUser + own | reserved → available (release) |
+| POST   | `/manage/images/upload`    | requireUser  | stage one image: body = raw bytes (WebP/JPEG/PNG, ≤300KB), response `{ url }`. The url isn't attached to any item — the form puts it in the create/update payload's `images` array. **503 if R2 unset.** |
+| POST   | `/admin/cleanup-orphan-images` | shared secret (`Authorization: Bearer $IMAGE_CLEANUP_SECRET`) | manual trigger for the orphan-image cleanup; the Worker `scheduled()` handler runs the same job nightly. |
+
+## Item images + R2
+
+Each item carries up to 3 image URLs in a `text[]` column (`wishlist_items.images`,
+cap enforced by a CHECK constraint). Images are uploaded **before** the item is
+saved: the form posts each cropped image to `/manage/images/upload`, gets back
+a public URL, and submits the list with the item — so the create/update
+transaction is atomic on the array. Objects live in R2 under `wishlist/<uuid>.webp`
+(same bucket as loctary-auth's avatars). Client crops to 4:3 and compresses to
+WebP ≤300KB; the server enforces the cap and also rejects URLs not under
+`R2_PUBLIC_BASE_URL`.
+
+The nightly cron (`scheduled()` in `worker.ts`, schedule `0 3 * * *` in
+`wrangler.toml`) lists every object under `wishlist/`, collects the URLs from
+every row's `images` array, converts them to keys, and removes objects whose
+key is not referenced. A 24h grace window protects staging uploads in flight
+(form open, item not yet submitted).
 
 ## Error contract
 
@@ -87,5 +107,8 @@ defense-in-depth (no direct anon/authenticated access). See
 
 See root [.env.example](../../.env.example). Required: `SUPABASE_URL`,
 `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `WISHLIST_OWNER_ID`. Optional:
-`PORT` (3003), `COOKIE_DOMAIN`, `CORS_ALLOWED_ORIGINS`, `NODE_ENV`. Missing
+`PORT` (3003), `COOKIE_DOMAIN`, `CORS_ALLOWED_ORIGINS`, `NODE_ENV`,
+`R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` /
+`R2_PUBLIC_BASE_URL` (image uploads 503 if any are missing),
+`IMAGE_CLEANUP_SECRET` (the manual cleanup endpoint 503s if unset). Missing
 required vars throw at boot.
