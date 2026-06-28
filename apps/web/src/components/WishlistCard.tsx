@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
-import { Anchor, Box, Card, Group, Stack, Text, Title } from "@mantine/core";
-import { IconExternalLink, IconEyeOff, IconGift } from "@tabler/icons-react";
+import { Box, Card, Stack, Text, Title } from "@mantine/core";
+import { IconEyeOff } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import type { ItemStatus, WishItem } from "../lib/api";
 import { tintFor } from "../lib/tint";
+import { ImageCarousel } from "./ImageCarousel";
 import { ReserveButton } from "./ReserveButton";
 
 const STATUS_BADGE: Record<
@@ -57,15 +58,10 @@ export function WishlistCard({
       <Link
         to="/user/$userId/wishlist/$itemId"
         params={{ userId: item.ownerId, itemId: item.id }}
-        className="wl-cover"
-        style={{ background: tint.bg, color: tint.fg, textDecoration: "none" }}
+        style={{ display: "block", position: "relative", color: tint.fg, textDecoration: "none" }}
         aria-label={item.title}
       >
-        {item.imageUrl ? (
-          <img src={item.imageUrl} alt={item.title} />
-        ) : (
-          <IconGift size={54} style={{ color: tint.fg }} />
-        )}
+        <ImageCarousel images={item.images} alt={item.title} bg={tint.bg} fg={tint.fg} />
         {price && <span className="wl-pricetag">{price}</span>}
         {badge && (
           <span className="wl-statebadge" style={{ background: badge.bg, color: badge.color }}>
@@ -98,14 +94,6 @@ export function WishlistCard({
           <Text size="sm" c="dimmed" lineClamp={3} style={{ flex: 1 }}>
             {item.description}
           </Text>
-        )}
-
-        {item.url && (
-          <Anchor href={item.url} target="_blank" rel="noopener noreferrer" size="sm">
-            <Group gap={4}>
-              View <IconExternalLink size={14} />
-            </Group>
-          </Anchor>
         )}
 
         <Box mt="auto" pt={6}>

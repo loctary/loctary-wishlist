@@ -27,6 +27,8 @@ function UserPage() {
   const query = useQuery({
     queryKey: ["user", userId],
     queryFn: () => getUser(userId),
+    // Public profile rarely changes mid-session — cache for the lifetime of the tab.
+    staleTime: Infinity,
   });
 
   const name = query.data?.user.name;

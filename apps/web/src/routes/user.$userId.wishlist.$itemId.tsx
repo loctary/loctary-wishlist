@@ -1,23 +1,29 @@
 import {
-  Alert,
   Anchor,
   Badge,
   Card,
   Center,
   Container,
   Group,
-  Image,
   Loader,
   Stack,
   Text,
   Title,
 } from "@mantine/core";
-import { IconArrowLeft, IconExternalLink, IconGift } from "@tabler/icons-react";
+import { IconArrowLeft } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { getItem, getUser, type ItemStatus } from "../lib/api";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import {
+  getItem,
+  getUser,
+  manageListItems,
+  type AdminWishItem,
+  type ItemStatus,
+} from "../lib/api";
 import { useSession } from "../lib/session";
 import { tintFor } from "../lib/tint";
+import { ImageCarousel } from "../components/ImageCarousel";
+import { OwnerItemActions } from "../components/OwnerItemActions";
 import { ReserveButton } from "../components/ReserveButton";
 import { UserLink } from "../components/UserLink";
 
@@ -35,6 +41,8 @@ const STATUS: Record<ItemStatus, { color: string; label: string } | null> = {
 function ItemPage() {
   const { userId, itemId } = Route.useParams();
   const { user: session } = useSession();
+  const router = useRouter();
+
   const query = useQuery({
     queryKey: ["item", itemId],
     queryFn: () => getItem(itemId),
@@ -42,8 +50,22 @@ function ItemPage() {
   const ownerQuery = useQuery({
     queryKey: ["user", userId],
     queryFn: () => getUser(userId),
+    // Owner name/avatar is stable for this session — don't refetch on focus.
+    staleTime: Infinity,
   });
   const ownerName = ownerQuery.data?.user.name;
+
+  // When the viewer owns the item we need the admin projection (reserver info,
+  // updatedAt) for `OwnerItemActions`. Pulled from the `manage-items` query so
+  // it's the exact same cache the owner grid uses — instant if the user came
+  // from their wishlist, one fetch otherwise. Disabled when not the owner.
+  const isOwner = !!session && session.id === userId;
+  const manageQuery = useQuery({
+    queryKey: ["manage-items"],
+    queryFn: () => manageListItems(),
+    enabled: isOwner,
+  });
+  const adminItem: AdminWishItem | undefined = manageQuery.data?.items.find((i) => i.id === itemId);
 
   return (
     <Container size="sm" py="xl" w="100%">
@@ -77,7 +99,6 @@ function ItemPage() {
         (() => {
           const item = query.data.item;
           const badge = STATUS[item.status];
-          const isOwner = session?.id === item.ownerId;
           const tint = tintFor(item.id);
           const price =
             item.price == null
@@ -89,27 +110,14 @@ function ItemPage() {
           return (
             <Card withBorder radius="lg" padding="lg" shadow="sm" pt={0}>
               <Stack>
-                {item.imageUrl ? (
-                  <Card.Section>
-                    <Image
-                      className="wl-cover"
-                      src={item.imageUrl}
-                      alt={item.title}
-                      fit="cover"
-                    />
-                  </Card.Section>
-                ) : (
-                  <Card.Section
-                    style={{
-                      background: tint.bg,
-                      display: "grid",
-                      placeItems: "center",
-                      aspectRatio: "4 / 3",
-                    }}
-                  >
-                    <IconGift size={72} style={{ color: tint.fg }} />
-                  </Card.Section>
-                )}
+                <Card.Section>
+                  <ImageCarousel
+                    images={item.images}
+                    alt={item.title}
+                    bg={tint.bg}
+                    fg={tint.fg}
+                  />
+                </Card.Section>
                 <Group justify="space-between" align="flex-start">
                   <Title order={2}>{item.title}</Title>
                   {badge && (
@@ -129,22 +137,24 @@ function ItemPage() {
                     {price}
                   </Text>
                 )}
-                {item.url && (
-                  <Anchor
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Group gap={4}>
-                      View product <IconExternalLink size={16} />
-                    </Group>
-                  </Anchor>
-                )}
                 {isOwner ? (
-                  <Alert color="gray" variant="light">
-                    This item is on your own wishlist — manage it from your
-                    wishlist page.
-                  </Alert>
+                  adminItem ? (
+                    <OwnerItemActions
+                      item={adminItem}
+                      onDeleted={() =>
+                        router.navigate({
+                          to: "/user/$userId/wishlist",
+                          params: { userId },
+                        })
+                      }
+                    />
+                  ) : (
+                    // Brief flicker while `manage-items` loads on a cold visit;
+                    // public projection is already showing, just no action row.
+                    <Center>
+                      <Loader size="sm" />
+                    </Center>
+                  )
                 ) : (
                   <ReserveButton item={item} />
                 )}

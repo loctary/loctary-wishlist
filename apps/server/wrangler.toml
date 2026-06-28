@@ -28,3 +28,16 @@ COOKIE_DOMAIN = ".loctary.com"
 CORS_ALLOWED_ORIGINS = "https://wishlist.loctary.com"
 # Default wishlist owner shown on the index (the admin's auth uuid).
 WISHLIST_OWNER_ID = "f5171c16-c017-4c45-90f4-9161789425c7"
+
+# Cloudflare R2: same bucket as loctary-auth (avatars/ vs wishlist/ prefix).
+# R2_ACCOUNT_ID + R2_BUCKET are non-secret; the access keys + cleanup secret
+# go in `wrangler secret put`:
+#   wrangler secret put R2_ACCESS_KEY_ID
+#   wrangler secret put R2_SECRET_ACCESS_KEY
+#   wrangler secret put IMAGE_CLEANUP_SECRET
+# R2_PUBLIC_BASE_URL is the bucket's r2.dev URL or a custom domain (same as
+# auth). Add it here once the bucket is wired up.
+
+# Nightly orphan-image cleanup. Cloudflare crons are UTC.
+[triggers]
+crons = ["0 3 * * *"]

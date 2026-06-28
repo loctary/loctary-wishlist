@@ -16,14 +16,92 @@
 .wl-cover {
   position: relative;
   aspect-ratio: 4 / 3;
-  display: grid;
-  place-items: center;
+  /* Flexbox not grid: iOS Safari/Chrome historically lay out a single grid
+     item baseline-aligned to the cell rather than truly centred, so the gift
+     icon ends up nudged off-centre vertically. Flex centring is reliable. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
 }
 .wl-cover img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* Carousel: a horizontal scroll snap holding the item images in order. The
+   first slide is the cover; users scroll/arrow through the rest. */
+.wl-carousel {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+}
+.wl-carousel-track {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.wl-carousel-track::-webkit-scrollbar { display: none; }
+.wl-carousel-slide {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  position: relative;
+  height: 100%;
+}
+.wl-carousel-slide img {
+  width: 100%;
+  height: 100%;
+  /* contain + the slide's background renders "stripes" letterboxing if a
+     picture isn't a true 4:3 — matches the requested behaviour. */
+  object-fit: contain;
+  background: var(--color-surface-alt, #f3f3f3);
+}
+.wl-carousel-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  /* Always visible — touch users can't hover. Hidden only when there's nowhere
+     to scroll (handled by the :disabled rule below). */
+  opacity: 1;
+  transition: background var(--dur-base) var(--ease-out);
+  z-index: 2;
+}
+.wl-carousel-arrow:hover { background: rgba(0, 0, 0, 0.65); }
+.wl-carousel-arrow[data-side="left"] { left: 8px; }
+.wl-carousel-arrow[data-side="right"] { right: 8px; }
+.wl-carousel-arrow:disabled { opacity: 0; pointer-events: none; }
+.wl-carousel-dots {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  z-index: 2;
+}
+.wl-carousel-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+.wl-carousel-dots span[data-active="true"] {
+  background: #fff;
 }
 
 .wl-pricetag {
@@ -37,6 +115,9 @@
   padding: 5px 11px;
   border-radius: var(--radius-full);
   box-shadow: var(--shadow-sm);
+  /* Sit above the carousel slides + arrows so the badge never gets buried
+     behind a wide image or the next/prev button. */
+  z-index: 3;
 }
 
 .wl-statebadge {
@@ -50,6 +131,8 @@
   font-weight: var(--fw-bold);
   padding: 5px 10px;
   border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+  z-index: 3;
 }
 
 /* Owner-section avatar on the Reserved page. */

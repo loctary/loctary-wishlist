@@ -54,6 +54,19 @@ export interface Env {
   corsAllowedOrigins: string[];
   /** Default wishlist owner shown on the index page (the admin's auth uuid). */
   wishlistOwnerId: string;
+  /** Cloudflare R2 (S3 API) — optional; image uploads are disabled if unset. */
+  r2AccountId: string;
+  r2AccessKeyId: string;
+  r2SecretAccessKey: string;
+  r2Bucket: string;
+  /** Public base URL the bucket is served from (r2.dev or a custom domain). */
+  r2PublicBaseUrl: string;
+  /**
+   * Shared secret protecting `POST /admin/cleanup-orphan-images` (the manual
+   * trigger for the nightly orphan-image cleanup). When empty the route 503s,
+   * so a missing secret can't accidentally expose it.
+   */
+  imageCleanupSecret: string;
 }
 
 let cached: Env | null = null;
@@ -75,6 +88,12 @@ export function getEnv(): Env {
       .map((o) => o.trim())
       .filter(Boolean),
     wishlistOwnerId: required("WISHLIST_OWNER_ID"),
+    r2AccountId: optional("R2_ACCOUNT_ID", ""),
+    r2AccessKeyId: optional("R2_ACCESS_KEY_ID", ""),
+    r2SecretAccessKey: optional("R2_SECRET_ACCESS_KEY", ""),
+    r2Bucket: optional("R2_BUCKET", ""),
+    r2PublicBaseUrl: optional("R2_PUBLIC_BASE_URL", "").replace(/\/$/, ""),
+    imageCleanupSecret: optional("IMAGE_CLEANUP_SECRET", ""),
   };
   return cached;
 }
