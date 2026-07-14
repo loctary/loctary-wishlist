@@ -18,8 +18,8 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as UserUserIdIndexRouteImport } from './routes/user.$userId.index'
-import { Route as UserUserIdWishlistIndexRouteImport } from './routes/user.$userId.wishlist.index'
-import { Route as UserUserIdWishlistItemIdRouteImport } from './routes/user.$userId.wishlist.$itemId'
+import { Route as UserUserIdWishlistsWishlistIdIndexRouteImport } from './routes/user.$userId.wishlists.$wishlistId.index'
+import { Route as UserUserIdWishlistsWishlistIdItemIdRouteImport } from './routes/user.$userId.wishlists.$wishlistId.$itemId'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
@@ -66,15 +66,16 @@ const UserUserIdIndexRoute = UserUserIdIndexRouteImport.update({
   path: '/user/$userId/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const UserUserIdWishlistIndexRoute = UserUserIdWishlistIndexRouteImport.update({
-  id: '/user/$userId/wishlist/',
-  path: '/user/$userId/wishlist/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const UserUserIdWishlistItemIdRoute =
-  UserUserIdWishlistItemIdRouteImport.update({
-    id: '/user/$userId/wishlist/$itemId',
-    path: '/user/$userId/wishlist/$itemId',
+const UserUserIdWishlistsWishlistIdIndexRoute =
+  UserUserIdWishlistsWishlistIdIndexRouteImport.update({
+    id: '/user/$userId/wishlists/$wishlistId/',
+    path: '/user/$userId/wishlists/$wishlistId/',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const UserUserIdWishlistsWishlistIdItemIdRoute =
+  UserUserIdWishlistsWishlistIdItemIdRouteImport.update({
+    id: '/user/$userId/wishlists/$wishlistId/$itemId',
+    path: '/user/$userId/wishlists/$wishlistId/$itemId',
     getParentRoute: () => rootRouteImport,
   } as any)
 
@@ -88,8 +89,8 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/user/$userId/': typeof UserUserIdIndexRoute
-  '/user/$userId/wishlist/$itemId': typeof UserUserIdWishlistItemIdRoute
-  '/user/$userId/wishlist/': typeof UserUserIdWishlistIndexRoute
+  '/user/$userId/wishlists/$wishlistId/$itemId': typeof UserUserIdWishlistsWishlistIdItemIdRoute
+  '/user/$userId/wishlists/$wishlistId/': typeof UserUserIdWishlistsWishlistIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -101,8 +102,8 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/user/$userId': typeof UserUserIdIndexRoute
-  '/user/$userId/wishlist/$itemId': typeof UserUserIdWishlistItemIdRoute
-  '/user/$userId/wishlist': typeof UserUserIdWishlistIndexRoute
+  '/user/$userId/wishlists/$wishlistId/$itemId': typeof UserUserIdWishlistsWishlistIdItemIdRoute
+  '/user/$userId/wishlists/$wishlistId': typeof UserUserIdWishlistsWishlistIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -115,8 +116,8 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/verify-email': typeof VerifyEmailRoute
   '/user/$userId/': typeof UserUserIdIndexRoute
-  '/user/$userId/wishlist/$itemId': typeof UserUserIdWishlistItemIdRoute
-  '/user/$userId/wishlist/': typeof UserUserIdWishlistIndexRoute
+  '/user/$userId/wishlists/$wishlistId/$itemId': typeof UserUserIdWishlistsWishlistIdItemIdRoute
+  '/user/$userId/wishlists/$wishlistId/': typeof UserUserIdWishlistsWishlistIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -130,8 +131,8 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/verify-email'
     | '/user/$userId/'
-    | '/user/$userId/wishlist/$itemId'
-    | '/user/$userId/wishlist/'
+    | '/user/$userId/wishlists/$wishlistId/$itemId'
+    | '/user/$userId/wishlists/$wishlistId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -143,8 +144,8 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/verify-email'
     | '/user/$userId'
-    | '/user/$userId/wishlist/$itemId'
-    | '/user/$userId/wishlist'
+    | '/user/$userId/wishlists/$wishlistId/$itemId'
+    | '/user/$userId/wishlists/$wishlistId'
   id:
     | '__root__'
     | '/'
@@ -156,8 +157,8 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/verify-email'
     | '/user/$userId/'
-    | '/user/$userId/wishlist/$itemId'
-    | '/user/$userId/wishlist/'
+    | '/user/$userId/wishlists/$wishlistId/$itemId'
+    | '/user/$userId/wishlists/$wishlistId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -170,8 +171,8 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   UserUserIdIndexRoute: typeof UserUserIdIndexRoute
-  UserUserIdWishlistItemIdRoute: typeof UserUserIdWishlistItemIdRoute
-  UserUserIdWishlistIndexRoute: typeof UserUserIdWishlistIndexRoute
+  UserUserIdWishlistsWishlistIdItemIdRoute: typeof UserUserIdWishlistsWishlistIdItemIdRoute
+  UserUserIdWishlistsWishlistIdIndexRoute: typeof UserUserIdWishlistsWishlistIdIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -239,18 +240,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UserUserIdIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/user/$userId/wishlist/': {
-      id: '/user/$userId/wishlist/'
-      path: '/user/$userId/wishlist'
-      fullPath: '/user/$userId/wishlist/'
-      preLoaderRoute: typeof UserUserIdWishlistIndexRouteImport
+    '/user/$userId/wishlists/$wishlistId/': {
+      id: '/user/$userId/wishlists/$wishlistId/'
+      path: '/user/$userId/wishlists/$wishlistId'
+      fullPath: '/user/$userId/wishlists/$wishlistId/'
+      preLoaderRoute: typeof UserUserIdWishlistsWishlistIdIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/user/$userId/wishlist/$itemId': {
-      id: '/user/$userId/wishlist/$itemId'
-      path: '/user/$userId/wishlist/$itemId'
-      fullPath: '/user/$userId/wishlist/$itemId'
-      preLoaderRoute: typeof UserUserIdWishlistItemIdRouteImport
+    '/user/$userId/wishlists/$wishlistId/$itemId': {
+      id: '/user/$userId/wishlists/$wishlistId/$itemId'
+      path: '/user/$userId/wishlists/$wishlistId/$itemId'
+      fullPath: '/user/$userId/wishlists/$wishlistId/$itemId'
+      preLoaderRoute: typeof UserUserIdWishlistsWishlistIdItemIdRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -266,8 +267,10 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   UserUserIdIndexRoute: UserUserIdIndexRoute,
-  UserUserIdWishlistItemIdRoute: UserUserIdWishlistItemIdRoute,
-  UserUserIdWishlistIndexRoute: UserUserIdWishlistIndexRoute,
+  UserUserIdWishlistsWishlistIdItemIdRoute:
+    UserUserIdWishlistsWishlistIdItemIdRoute,
+  UserUserIdWishlistsWishlistIdIndexRoute:
+    UserUserIdWishlistsWishlistIdIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

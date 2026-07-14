@@ -2,7 +2,8 @@
 
 .wl-card {
   overflow: hidden;
-  transition: box-shadow var(--dur-base) var(--ease-out),
+  transition:
+    box-shadow var(--dur-base) var(--ease-out),
     transform var(--dur-base) var(--ease-out);
 }
 .wl-card:hover {
@@ -45,7 +46,9 @@
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
 }
-.wl-carousel-track::-webkit-scrollbar { display: none; }
+.wl-carousel-track::-webkit-scrollbar {
+  display: none;
+}
 .wl-carousel-slide {
   flex: 0 0 100%;
   scroll-snap-align: start;
@@ -80,10 +83,19 @@
   transition: background var(--dur-base) var(--ease-out);
   z-index: 2;
 }
-.wl-carousel-arrow:hover { background: rgba(0, 0, 0, 0.65); }
-.wl-carousel-arrow[data-side="left"] { left: 8px; }
-.wl-carousel-arrow[data-side="right"] { right: 8px; }
-.wl-carousel-arrow:disabled { opacity: 0; pointer-events: none; }
+.wl-carousel-arrow:hover {
+  background: rgba(0, 0, 0, 0.65);
+}
+.wl-carousel-arrow[data-side="left"] {
+  left: 8px;
+}
+.wl-carousel-arrow[data-side="right"] {
+  right: 8px;
+}
+.wl-carousel-arrow:disabled {
+  opacity: 0;
+  pointer-events: none;
+}
 .wl-carousel-dots {
   position: absolute;
   bottom: 8px;

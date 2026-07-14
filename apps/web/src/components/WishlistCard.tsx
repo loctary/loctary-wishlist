@@ -56,8 +56,8 @@ export function WishlistCard({
       style={{ display: "flex", flexDirection: "column" }}
     >
       <Link
-        to="/user/$userId/wishlist/$itemId"
-        params={{ userId: item.ownerId, itemId: item.id }}
+        to="/user/$userId/wishlists/$wishlistId/$itemId"
+        params={{ userId: item.ownerId, wishlistId: item.wishlistId, itemId: item.id }}
         style={{ display: "block", position: "relative", color: tint.fg, textDecoration: "none" }}
         aria-label={item.title}
       >
@@ -81,8 +81,8 @@ export function WishlistCard({
 
       <Stack gap={6} p="md" style={{ flex: 1 }}>
         <Link
-          to="/user/$userId/wishlist/$itemId"
-          params={{ userId: item.ownerId, itemId: item.id }}
+          to="/user/$userId/wishlists/$wishlistId/$itemId"
+          params={{ userId: item.ownerId, wishlistId: item.wishlistId, itemId: item.id }}
           style={{ textDecoration: "none", color: "inherit" }}
         >
           <Title order={5} fw={700} lineClamp={2} style={{ letterSpacing: "-0.01em" }}>

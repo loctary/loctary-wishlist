@@ -46,6 +46,7 @@ export function ItemForm({
     initialValues: {
       title: initial?.title ?? "",
       description: initial?.description ?? "",
+      url: initial?.url ?? "",
       price: initial?.price ?? ("" as number | ""),
       currency: initial?.currency ?? "USD",
       priority: initial?.position ?? 0,
@@ -53,6 +54,19 @@ export function ItemForm({
     },
     validate: {
       title: (v) => (v.trim().length === 0 ? "Title is required" : null),
+      url: (v) => {
+        const trimmed = v.trim();
+        if (trimmed.length === 0) return null;
+        try {
+          const parsed = new URL(trimmed);
+          if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+            return "Must start with http:// or https://";
+          }
+          return null;
+        } catch {
+          return "Enter a valid URL";
+        }
+      },
     },
   });
 
@@ -60,6 +74,7 @@ export function ItemForm({
     onSubmit({
       title: values.title.trim(),
       description: values.description.trim() || null,
+      url: values.url.trim() || null,
       price: values.price === "" ? null : Number(values.price),
       currency: values.currency.trim() || "USD",
       // The form's single "Priority" field is the table's `position` column —
@@ -83,6 +98,14 @@ export function ItemForm({
           autosize
           minRows={2}
           {...form.getInputProps("description")}
+        />
+        <TextInput
+          label="Product URL"
+          description="Optional — where the item can be bought"
+          placeholder="https://…"
+          type="url"
+          inputMode="url"
+          {...form.getInputProps("url")}
         />
 
         <Input.Wrapper

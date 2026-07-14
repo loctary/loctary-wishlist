@@ -23,8 +23,11 @@ export interface ItemViewerCaps {
 export interface WishItem {
   id: string;
   ownerId: string;
+  wishlistId: string;
   title: string;
   description: string | null;
+  /** Optional external product URL (e.g. the store page). */
+  url: string | null;
   price: number | null;
   currency: string;
   /** Sort key — UI labels this "Priority". */
@@ -50,6 +53,39 @@ export interface ItemsPage {
   items: WishItem[];
   nextCursor: string | null;
 }
+
+/* --- wishlists ------------------------------------------------------------ */
+
+/** Public projection of a wishlist. Only active lists are returned publicly. */
+export interface Wishlist {
+  id: string;
+  ownerId: string;
+  title: string;
+  description: string | null;
+  coverImageUrl: string | null;
+  position: number;
+  createdAt: string;
+  /** Number of ACTIVE items on this list (what visitors will see). */
+  itemsCount: number;
+  /** Number of items that have been claimed (reserved or gifted). */
+  reservedCount: number;
+}
+
+/** Owner projection — adds `isActive` + `updatedAt`. */
+export interface AdminWishlist extends Wishlist {
+  isActive: boolean;
+  updatedAt: string;
+}
+
+export interface WishlistInput {
+  title: string;
+  description?: string | null;
+  coverImageUrl?: string | null;
+  isActive?: boolean;
+  position?: number;
+}
+
+/* --- errors --------------------------------------------------------------- */
 
 export interface ApiError {
   error: string;
@@ -81,33 +117,67 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
-/* ----------------------------- public ----------------------------- */
+/* ---------------------------- wishlists --------------------------- */
 
-export function listItems(params: { owner?: string; cursor?: string; limit?: number } = {}) {
-  const q = new URLSearchParams();
-  if (params.owner) q.set("owner", params.owner);
+// Public user profiles are served by the auth backend; see `lib/user.ts`.
+
+/** Public: a user's active wishlists (list-of-lists on their profile page). */
+export function listUserWishlists(ownerId: string) {
+  return request<{ wishlists: Wishlist[] }>(`/wishlist/wishlists?owner=${encodeURIComponent(ownerId)}`);
+}
+
+/**
+ * Single wishlist. Response is either the public projection or the admin one
+ * depending on whether the viewer owns it; consumers should type-check `isActive`
+ * before using owner-only fields.
+ */
+export function getWishlist(id: string) {
+  return request<{ wishlist: Wishlist | AdminWishlist }>(`/wishlist/wishlists/${id}`);
+}
+
+/** Owner: every list on the caller's account, including inactive. */
+export function manageListWishlists() {
+  return request<{ wishlists: AdminWishlist[] }>(`/wishlist/manage/wishlists`);
+}
+
+export function manageCreateWishlist(input: WishlistInput) {
+  return request<{ wishlist: AdminWishlist }>(`/wishlist/manage/wishlists`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function manageUpdateWishlist(id: string, input: Partial<WishlistInput>) {
+  return request<{ wishlist: AdminWishlist }>(`/wishlist/manage/wishlists/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+export function manageDeleteWishlist(id: string) {
+  return request<{ ok: true }>(`/wishlist/manage/wishlists/${id}`, { method: "DELETE" });
+}
+
+export function manageSetWishlistActive(id: string, active: boolean) {
+  return request<{ wishlist: AdminWishlist }>(`/wishlist/manage/wishlists/${id}/active`, {
+    method: "POST",
+    body: JSON.stringify({ active }),
+  });
+}
+
+/* ----------------------------- items ------------------------------ */
+
+/** Public paginated items in a wishlist. */
+export function listItems(params: { wishlist: string; cursor?: string; limit?: number }) {
+  const q = new URLSearchParams({ wishlist: params.wishlist });
   if (params.cursor) q.set("cursor", params.cursor);
   if (params.limit) q.set("limit", String(params.limit));
-  const qs = q.toString();
-  return request<ItemsPage>(`/wishlist/items${qs ? `?${qs}` : ""}`);
+  return request<ItemsPage>(`/wishlist/items?${q.toString()}`);
 }
 
 export function getItem(id: string) {
   return request<{ item: WishItem }>(`/wishlist/items/${id}`);
 }
-
-/** A user's public profile — display name + avatar (no email). */
-export interface PublicUser {
-  id: string;
-  name: string | null;
-  avatarUrl: string | null;
-}
-
-export function getUser(id: string) {
-  return request<{ user: PublicUser }>(`/wishlist/users/${id}`);
-}
-
-/* ----------------------------- user ------------------------------- */
 
 export function reserveItem(id: string) {
   return request<{ item: WishItem }>(`/wishlist/items/${id}/reserve`, { method: "POST" });
@@ -127,11 +197,15 @@ export function myReservations() {
   return request<{ items: ReservedWishItem[] }>(`/wishlist/me/reservations`);
 }
 
-/* --------------------- manage (your own list) --------------------- */
+/* --------------------- manage (your items) ------------------------ */
 
 export interface ItemInput {
+  /** Required on create; not editable (moving items between lists isn't a v1 flow). */
+  wishlistId?: string;
   title: string;
   description?: string | null;
+  /** Optional external product URL. Empty string is treated as null server-side. */
+  url?: string | null;
   price?: number | null;
   currency?: string;
   /** Sort key — UI labels this "Priority". */
@@ -141,12 +215,12 @@ export interface ItemInput {
   images?: string[];
 }
 
-/** The caller's own list (always `owner = caller`), incl. who reserved each item. */
-export function manageListItems() {
-  return request<{ items: AdminWishItem[] }>(`/wishlist/manage/items`);
+/** All the caller's items on one of their own lists (includes reserver identity). */
+export function manageListItems(wishlistId: string) {
+  return request<{ items: AdminWishItem[] }>(`/wishlist/manage/items?wishlist=${encodeURIComponent(wishlistId)}`);
 }
 
-export function manageCreateItem(input: ItemInput) {
+export function manageCreateItem(input: ItemInput & { wishlistId: string }) {
   return request<{ item: AdminWishItem }>(`/wishlist/manage/items`, {
     method: "POST",
     body: JSON.stringify(input),
@@ -154,9 +228,10 @@ export function manageCreateItem(input: ItemInput) {
 }
 
 export function manageUpdateItem(id: string, input: Partial<ItemInput>) {
+  const { wishlistId: _drop, ...body } = input;
   return request<{ item: AdminWishItem }>(`/wishlist/manage/items/${id}`, {
     method: "PATCH",
-    body: JSON.stringify(input),
+    body: JSON.stringify(body),
   });
 }
 
@@ -184,9 +259,9 @@ export function manageDeclineItem(id: string) {
 
 /**
  * Stage one cropped+compressed image (≤300KB) to R2 and get a public URL back.
- * The url isn't yet attached to any item — the caller stores it in the form's
- * local `images` state and submits it with the item. Images uploaded but never
- * attached are removed by the nightly orphan-cleanup cron.
+ * The url isn't yet attached to any record — the caller stores it in the form's
+ * local state and submits it with the item / wishlist. Images uploaded but
+ * never attached are removed by the nightly orphan-cleanup cron.
  */
 export async function uploadImage(blob: Blob): Promise<{ url: string }> {
   const res = await fetch(`${API}/wishlist/manage/images/upload`, {

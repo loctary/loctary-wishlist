@@ -52,7 +52,7 @@ export function AppHeader() {
 
   // "My wishlist" → the caller's own list; active across its item subroutes.
   const myWishlistActive =
-    !!session && pathname.startsWith(`/user/${session.id}/wishlist`);
+    !!session && pathname.startsWith(`/user/${session.id}`);
   const reservedActive = pathname === "/reserved";
 
   return (
@@ -91,7 +91,7 @@ export function AppHeader() {
               <Button
                 renderRoot={(props) => (
                   <Link
-                    to="/user/$userId/wishlist"
+                    to="/user/$userId"
                     params={{ userId: session.id }}
                     {...props}
                   />
@@ -103,7 +103,7 @@ export function AppHeader() {
                 c={myWishlistActive ? undefined : "var(--text-secondary)"}
                 leftSection={<IconListCheck size={17} />}
               >
-                My wishlist
+                My page
               </Button>
               <Button
                 component={Link}
@@ -217,12 +217,12 @@ export function AppHeader() {
         >
           <Stack gap={4}>
             <NavLink
-              label="My wishlist"
+              label="My page"
               leftSection={<IconListCheck size={18} />}
               active={myWishlistActive}
               renderRoot={(props) => (
                 <Link
-                  to="/user/$userId/wishlist"
+                  to="/user/$userId"
                   params={{ userId: session.id }}
                   {...props}
                 />

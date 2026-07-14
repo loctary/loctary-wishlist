@@ -7,16 +7,15 @@ import { listItems } from "../lib/api";
 import { WishlistCard } from "./WishlistCard";
 
 /**
- * Public, infinite-scrolling grid of one owner's wishlist. Shared by the index
- * (`owner` omitted → the backend's default `WISHLIST_OWNER_ID`, i.e. the admin's
- * list) and the visitor view of `/user/$userId/wishlist`. Query key is
- * owner-scoped so different lists don't share a cache; `ReserveButton`'s broad
- * `["items"]` invalidation still matches via prefix.
+ * Public, infinite-scrolling grid of ONE wishlist. Rendered inside the visitor
+ * view of `/user/$userId/wishlists/$wishlistId`. Query key is list-scoped so
+ * different lists don't share a cache; `ReserveButton`'s broad `["items"]`
+ * invalidation still matches via prefix.
  */
-export function WishlistGrid({ owner }: { owner?: string }) {
+export function WishlistGrid({ wishlistId }: { wishlistId: string }) {
   const query = useInfiniteQuery({
-    queryKey: ["items", owner ?? "index"],
-    queryFn: ({ pageParam }) => listItems({ owner, cursor: pageParam, limit: 12 }),
+    queryKey: ["items", wishlistId],
+    queryFn: ({ pageParam }) => listItems({ wishlist: wishlistId, cursor: pageParam, limit: 12 }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (last) => last.nextCursor ?? undefined,
   });

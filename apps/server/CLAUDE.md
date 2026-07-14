@@ -23,11 +23,15 @@ still comes from metadata.
 
 ## Ownership, not admin
 
-Every user owns a wishlist. The `/manage/*` routes act strictly on the caller's
-**own** items: the `owner_id = caller.id` filter is baked into each query, so it's
-atomic (a non-owner just gets a 404). The `admin` role no longer gates anything —
-its only remaining meaning is that `WISHLIST_OWNER_ID` (the admin) is the list the
-host's index page renders.
+Every user owns any number of **wishlists**; each wishlist owns items. The
+`/manage/*` routes act strictly on the caller's **own** rows: the
+`owner_id = caller.id` filter is baked into each query, so it's atomic
+(a non-owner just gets a 404). `wishlist_items.owner_id` is redundant with
+`wishlists.owner_id` but kept as a cheap authorization key — a DB trigger
+(`enforce_item_owner_matches_list`, migration 0005) rejects any insert/update
+that would put an item on a list it doesn't belong to. The `admin` role no
+longer gates anything; `WISHLIST_OWNER_ID` is only carried forward for legacy
+reasons (the host's `/` route no longer uses it).
 
 `src/cookies.ts` **must** keep the same cookie names/policy as loctary-auth.
 
@@ -48,38 +52,44 @@ host's index page renders.
 
 | Method | Path                       | Guard        | Notes |
 | ------ | -------------------------- | ------------ | ----- |
-| GET    | `/items?owner=&cursor=&limit=` | public   | infinite list; keyset cursor over `(position, created_at, id)`; default owner = `WISHLIST_OWNER_ID`. `publicItem()` hides the reserver. **Only `is_active` items.** |
-| GET    | `/items/:id`               | public       | single item (`publicItem()`); **404 for an inactive item unless you're the owner** |
-| GET    | `/users/:id`               | public       | a user's public profile (`{ id, name }`; **no email**) — to label whose list it is |
+| GET    | `/wishlists?owner=`        | public       | a user's ACTIVE wishlists |
+| GET    | `/wishlists/:id`           | public       | one wishlist (owner projection if you own it, else public). **404 if inactive and you're not the owner** |
+| GET    | `/items?wishlist=&cursor=&limit=` | public | items on a wishlist (infinite, keyset cursor over `(position, created_at, id)`). Parent list must be active OR you must own it. `publicItem()` hides the reserver. **Only `is_active` items.** |
+| GET    | `/items/:id`               | public       | single item (`publicItem()`); **404 if the item OR its parent list is inactive to a non-owner** |
 | GET    | `/me/reservations`         | requireUser  | the caller's own reservations, each with its list `owner` resolved |
 | POST   | `/items/:id/reserve`       | requireUser  | available → reserved; 409 if taken; idempotent for the same user; **400 if it's your own list** |
 | DELETE | `/items/:id/reserve`       | requireUser  | cancel own reservation (only while `reserved`) → available |
-| GET    | `/manage/items`            | requireUser  | the caller's **own** list incl. reserver id + name (**no email**) |
-| POST   | `/manage/items`            | requireUser  | create (owner = caller) |
-| PATCH  | `/manage/items/:id`        | requireUser + own | edit (404 if not your item; **409 while reserved or confirmed** — gifted items are closed) |
+| GET    | `/manage/wishlists`        | requireUser  | all of the caller's lists (active + inactive) |
+| POST   | `/manage/wishlists`        | requireUser  | create a list |
+| PATCH  | `/manage/wishlists/:id`    | requireUser + own | edit (404 if not yours) |
+| POST   | `/manage/wishlists/:id/active` | requireUser + own | `{ active }` — deactivating hides the list AND all its items from the public |
+| DELETE | `/manage/wishlists/:id`    | requireUser + own | delete list + cascade items; **409 if any item is reserved or confirmed** |
+| GET    | `/manage/items?wishlist=`  | requireUser + own | items on one of the caller's lists incl. reserver id + name (**no email**) |
+| POST   | `/manage/items`            | requireUser  | create (requires `wishlistId` owned by caller; owner = caller) |
+| PATCH  | `/manage/items/:id`        | requireUser + own | edit (404 if not your item; **409 while reserved or confirmed** — gifted items are closed). `wishlistId` is not editable — moving items between lists isn't a v1 flow. |
 | POST   | `/manage/items/:id/active` | requireUser + own | show/hide (`{ active }`); **409 while reserved** |
 | DELETE | `/manage/items/:id`        | requireUser + own | delete (404 if not your item); **409 if reserved or confirmed — gifted items deactivate instead** |
 | POST   | `/manage/items/:id/confirm`| requireUser + own | reserved → confirmed (gift presented) |
 | POST   | `/manage/items/:id/decline`| requireUser + own | reserved → available (release) |
-| POST   | `/manage/images/upload`    | requireUser  | stage one image: body = raw bytes (WebP/JPEG/PNG, ≤300KB), response `{ url }`. The url isn't attached to any item — the form puts it in the create/update payload's `images` array. **503 if R2 unset.** |
-| POST   | `/admin/cleanup-orphan-images` | shared secret (`Authorization: Bearer $IMAGE_CLEANUP_SECRET`) | manual trigger for the orphan-image cleanup; the Worker `scheduled()` handler runs the same job nightly. |
+| POST   | `/manage/images/upload`    | requireUser  | stage one image (WebP/JPEG/PNG, ≤300KB); shared by item images and wishlist covers. Response `{ url }`. **503 if R2 unset.** |
+| POST   | `/admin/cleanup-orphan-images` | shared secret (`Authorization: Bearer $IMAGE_CLEANUP_SECRET`) | manual trigger for orphan-image cleanup; the Worker `scheduled()` handler runs the same job nightly. |
 
-## Item images + R2
+## Images + R2
 
-Each item carries up to 3 image URLs in a `text[]` column (`wishlist_items.images`,
-cap enforced by a CHECK constraint). Images are uploaded **before** the item is
-saved: the form posts each cropped image to `/manage/images/upload`, gets back
-a public URL, and submits the list with the item — so the create/update
-transaction is atomic on the array. Objects live in R2 under `wishlist/<uuid>.webp`
-(same bucket as loctary-auth's avatars). Client crops to 4:3 and compresses to
-WebP ≤300KB; the server enforces the cap and also rejects URLs not under
-`R2_PUBLIC_BASE_URL`.
+Two sources reference R2 objects: `wishlist_items.images` (up to 3 URLs per
+item, cover at index 0) and `wishlists.cover_image_url` (optional). Both are
+uploaded **before** the parent row is saved: the client posts each cropped
+image to `/manage/images/upload`, gets a public URL back, and submits it with
+the item / wishlist create-or-update payload. Objects live under
+`wishlist/<uuid>.webp` (same bucket as loctary-auth's avatars). Client crops
+to 4:3 and compresses to WebP ≤300KB; the server enforces the cap and rejects
+URLs outside `R2_PUBLIC_BASE_URL`.
 
 The nightly cron (`scheduled()` in `worker.ts`, schedule `0 3 * * *` in
-`wrangler.toml`) lists every object under `wishlist/`, collects the URLs from
-every row's `images` array, converts them to keys, and removes objects whose
-key is not referenced. A 24h grace window protects staging uploads in flight
-(form open, item not yet submitted).
+`wrangler.toml`) lists every object under `wishlist/`, unions the keys
+referenced by `wishlist_items.images` and `wishlists.cover_image_url`, and
+removes anything else. A 24h grace window protects staging uploads in flight
+(form open, parent not yet submitted).
 
 ## Error contract
 
