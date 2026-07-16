@@ -140,7 +140,7 @@ function ReservedPage() {
                       style={{ letterSpacing: "-0.01em" }}
                     >
                       <UserLink id={group.id} name={group.name} inherit />
-                      {"'s wishlist"}
+                      {"'s wishlists"}
                     </Title>
                     <Text size="sm" c="dimmed" ff="monospace">
                       {group.items.length}

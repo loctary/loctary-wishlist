@@ -58,7 +58,7 @@ not tear the embedded page down, or the remote's mount-time `invalidate()`
 re-fires → infinite loop.
 
 The header (`src/components/Header.tsx`) reflects session: a **Log in** button
-when logged out, or top-nav links (My wishlist → `/user/$id/wishlist`, Reserved →
+when logged out, or top-nav links (My wishlists → `/user/$id/wishlists`, Reserved →
 `/reserved`) plus a user-avatar `Menu` (Profile / Log out) when logged in. The
 host no longer reads `role` — every gate left in the UI is ownership-based and
 the backend enforces the rest.
@@ -67,50 +67,54 @@ the backend enforces the rest.
 
 | Route | What |
 | ----- | ---- |
-| `/` | always the admin's wishlist (`WISHLIST_OWNER_ID`) — `WishlistGrid` with no `owner` |
-| `/user/$userId/wishlist` | a user's wishlist (public). Owner → management UI (`OwnerWishlist`: add/edit/delete + confirm/decline, sees the reserver); visitor → reservable `WishlistGrid owner={userId}` |
-| `/user/$userId/wishlist/$itemId` | public single item; states whose list it's on; reserve is hidden for the owner |
-| `/user/$userId` | public user page: display name + link to their wishlist |
+| `/` | coming-soon stub with Log in / Register CTAs (or "Go to my wishlists" when signed in). The public wishlist directory will live here eventually. |
+| `/user/$userId` | the user's public page — `UserPage` in `src/components/UserPage.tsx` (renders `OwnerUserPage` for self, `VisitorUserPage` otherwise). Header (avatar + title + "Joined …") over a 2-col tile grid of wishlists. Owner gets "+ Add wishlist" + per-tile edit/hide/delete menu and sees hidden lists dimmed with a badge; visitor sees only ACTIVE lists. |
+| `/user/$userId/wishlists/$wishlistId` | one wishlist's items. Owner → `OwnerWishlist` (add-item flow scoped to this list + per-item toolset); visitor → cover/title/description + reservable `WishlistGrid wishlistId={wishlistId}` |
+| `/user/$userId/wishlists/$wishlistId/$itemId` | single item detail; states which list it's on; reserve hidden for the owner |
 | `/reserved` | the caller's own reservations, grouped by list-owner (logged-in only) |
 | `/login` `/register` `/forgot-password` `/reset-password` `/verify-email` | one embedded auth page each via `AuthScreen page=…` (redirects home if already logged in) |
 | `/profile` | embedded read-only profile via `ProfileScreen` (redirects to /login if logged out) |
 
-Every user owns a wishlist. The infinite grid lives in
-`src/components/WishlistGrid.tsx` (shared by `/` and the visitor view);
-owner-mode management lives in `src/components/OwnerWishlist.tsx` (the old
-`/admin` page, now keyed off ownership, not the admin role).
+Every user owns any number of **wishlists**; each item belongs to exactly one
+list. The user's page (`UserPage.tsx`) is the entry point — visitor + owner
+variants share layout but the owner branch adds the "+ Add wishlist" button and
+per-tile CRUD via `WishlistFormModal`. Clicking a tile navigates to the
+`WishlistView.tsx` (single list), which hands off to `OwnerWishlist.tsx` when
+the viewer owns the profile, else to `WishlistGrid.tsx` (public infinite scroll,
+list-scoped).
 
 The owner-side toolset (approve / cancel reservation, hide/show, edit, delete,
 plus the reserver line) is a single component `src/components/OwnerItemActions.tsx`,
 used both as each `WishlistCard` footer in `OwnerWishlist` *and* on the item
 detail page when the viewer is the owner. The detail page pulls the admin
-projection it needs from the shared `["manage-items"]` cache (instant if the
-user came from their wishlist, otherwise one extra fetch). `OwnerWishlist`
-itself now only owns the "Add item" flow — every per-item action is delegated
-to the shared component.
+projection it needs from the shared `["manage-items", wishlistId]` cache
+(instant if the user came from their wishlist, otherwise one extra fetch).
+Add-item is scoped to a specific list — moving items between lists isn't a v1
+flow.
 
 The app shell (`__root.tsx`) is a full-height flex column (header + `flex:1`
 `main`), so short pages (auth, profile) center in the viewport.
 
-## Item images
+## Images
 
-Each item carries up to 3 image URLs (`item.images: string[]`, ordered, index 0
-is the cover) served from R2. The card cover and the item detail page render an
-`ImageCarousel` (a CSS scroll-snap track with hover arrows; preview at index 0)
-— the empty state falls back to the existing tinted gift icon.
+Each **item** carries up to 3 image URLs (`item.images: string[]`, ordered,
+index 0 is the cover) served from R2. Each **wishlist** carries an optional
+`coverImageUrl` shown on its tile + page header. Everything goes through the
+same staging endpoint (`POST /wishlist/manage/images/upload`) — the client
+picks → crops 4:3 via `react-easy-crop` → `getCroppedItemImage`
+(`src/lib/cropImage.ts`) compresses to WebP ≤300KB → the URL is kept in local
+form state and submitted with the parent record.
 
-The `ItemForm` Add/Edit modal manages images inline, after Description: a 3-up
-grid of 4:3 thumbnails with a dashed "Select image" placeholder of the same
-size while there's room. Clicking it opens `ImageCropperModal`: pick → 4:3
-crop via `react-easy-crop` → `getCroppedItemImage` (`src/lib/cropImage.ts`)
-compresses to WebP ≤300KB → `uploadImage` POSTs raw bytes to the staging
-endpoint and returns a URL, which the form pushes into local state. Submit
-sends the whole `images: string[]` with the item. If the user closes the
-modal without submitting, the staged R2 objects are reaped by the server's
-nightly orphan-cleanup cron (24h grace).
+`ImageCropperModal` is the shared picker; `ItemForm` uses it for the 3-up
+grid of item images, `WishlistFormModal` uses it for the single cover slot.
+If the user closes without saving, the staged R2 object is reaped by the
+nightly orphan-cleanup cron (24h grace, references BOTH `items.images` and
+`wishlists.cover_image_url`).
 
-The "Product URL" field was dropped — the image carries the visual; an
-external store link added little. The "Priority"/"Position" pair was merged
+The optional "Product URL" field points at the exact store page (right
+variant, correct size); when set, the item detail page renders it as an
+"View product page" external anchor (dropped in 0004, added back in 0006).
+The "Priority"/"Position" pair was merged
 into a single "Priority" field — it maps to the table's `position` column
 (the actual sort key); `priority` was dropped (migration 0003). The
 `wishlist_item_images` side-table was replaced by an inline `text[]` (0004).
@@ -119,11 +123,12 @@ into a single "Priority" field — it maps to the table's `position` column
 
 - `src/lib/api.ts` — typed wishlist client (`credentials: "include"`). Throws
   `WishlistApiError` (carries `fields`) on failure.
-- React Query everywhere. Public list cache key `["items", owner]` (owner-scoped;
-  `"index"` for the admin default), owner-management `["manage-items"]`, a user's
-  public profile `["user", id]`, reservations `["my-reservations"]`, session
-  `["session"]` — mutations invalidate the ones they affect (`ReserveButton`'s
-  broad `["items"]` matches every owner via prefix).
+- React Query keys: public items on a list `["items", wishlistId]`, owner's items
+  on a list `["manage-items", wishlistId]`, one wishlist `["wishlist", id]`, a
+  user's public wishlists `["user-wishlists", ownerId]`, owner's list-of-lists
+  `["manage-wishlists"]`, public profile `["user", id]`, reservations
+  `["my-reservations"]`. Mutations invalidate the ones they affect; broad
+  invalidations (`["items"]`, `["manage-items"]`) match every list via prefix.
 
 ## Theme
 

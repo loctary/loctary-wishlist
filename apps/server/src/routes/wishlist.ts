@@ -18,18 +18,16 @@ import {
 } from "../r2.js";
 
 /**
- * Wishlist API. All data access uses the service-role client (`admin()`); the
- * `requireUser` middleware plus per-item ownership checks do the authorization.
- * Every user owns a wishlist: they manage their own items under `/manage/*` and
- * may reserve from anyone else's. Public responses go through `publicItem()`,
- * which strips who reserved an item — browsers learn an item is `reserved` (so
- * nobody double-buys) but never by whom.
+ * Wishlist API.
  *
- * Images: each item owns up to 3 URLs in the inline `images` array column. The
- * client uploads each cropped image to R2 first (see `/manage/images/upload`)
- * and submits the resulting URLs with the item — so create/update is atomic
- * on the array. Images uploaded but never attached are removed by the nightly
- * orphan-cleanup cron.
+ * Data model: users own `wishlists`, wishlists own `wishlist_items`. Items also
+ * carry a redundant `owner_id` (cheap authorization key); a DB trigger keeps
+ * it in sync with the parent list's owner so it can never drift.
+ *
+ * Access: all queries use the service-role client (`admin()`); `requireUser`
+ * + per-row ownership filters do the authorization. Public projections strip
+ * the reserver so browsers can see an item is `reserved` (no double-buying)
+ * without learning who took it.
  */
 
 const wishlist = new Hono<{ Variables: AppVariables }>();
@@ -59,15 +57,18 @@ async function parseBody<T>(c: Context, schema: z.ZodSchema<T>) {
   return { ok: true as const, data: result.data };
 }
 
-/** All columns we ever read back. */
+/* --- items ---------------------------------------------------------------- */
+
 const ITEM_COLUMNS =
-  "id, owner_id, title, description, price, currency, position, status, is_active, images, reserved_by, reserved_at, created_at, updated_at";
+  "id, owner_id, wishlist_id, title, description, url, price, currency, position, status, is_active, images, reserved_by, reserved_at, created_at, updated_at";
 
 interface ItemRow {
   id: string;
   owner_id: string;
+  wishlist_id: string;
   title: string;
   description: string | null;
+  url: string | null;
   price: number | null;
   currency: string;
   position: number;
@@ -80,25 +81,16 @@ interface ItemRow {
   updated_at: string;
 }
 
-/**
- * Public projection — never leaks the reserver's identity. It does include a
- * `viewer` block of capability flags computed against the current session: these
- * are true only for the asker (a third party sees all-false), so the frontend can
- * render the right button state up-front without revealing *who* reserved an item.
- *
- * - `isOwner`     — the viewer owns this item (can't reserve their own).
- * - `isReserver`  — the viewer is the one who reserved it.
- * - `canReserve`  — available, signed in, and not the owner.
- * - `canCancel`   — reserved, and the viewer is the reserver OR the list owner.
- */
 function publicItem(row: ItemRow, viewer?: SessionUser | null) {
   const isOwner = !!viewer && row.owner_id === viewer.id;
   const isReserver = !!viewer && row.reserved_by === viewer.id;
   return {
     id: row.id,
     ownerId: row.owner_id,
+    wishlistId: row.wishlist_id,
     title: row.title,
     description: row.description,
+    url: row.url,
     price: row.price,
     currency: row.currency,
     position: row.position,
@@ -115,11 +107,6 @@ function publicItem(row: ItemRow, viewer?: SessionUser | null) {
   };
 }
 
-/**
- * Owner projection — includes the reservation, resolved to the reserver. Only
- * the reserver's id + display name are exposed; their email is never leaked to
- * the client, even to the list owner.
- */
 function adminItem(row: ItemRow, reserver: { id: string; name: string | null } | null) {
   return {
     ...publicItem(row),
@@ -130,7 +117,47 @@ function adminItem(row: ItemRow, reserver: { id: string; name: string | null } |
   };
 }
 
-/** Opaque keyset cursor over (position, created_at, id) in descending order. */
+/* --- wishlists ------------------------------------------------------------ */
+
+const LIST_COLUMNS =
+  "id, owner_id, title, description, cover_image_url, is_active, position, created_at, updated_at";
+
+interface ListRow {
+  id: string;
+  owner_id: string;
+  title: string;
+  description: string | null;
+  cover_image_url: string | null;
+  is_active: boolean;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+function publicList(row: ListRow, counts?: { items: number; reserved: number }) {
+  return {
+    id: row.id,
+    ownerId: row.owner_id,
+    title: row.title,
+    description: row.description,
+    coverImageUrl: row.cover_image_url,
+    position: row.position,
+    createdAt: row.created_at,
+    itemsCount: counts?.items ?? 0,
+    reservedCount: counts?.reserved ?? 0,
+  };
+}
+
+function adminList(row: ListRow, counts?: { items: number; reserved: number }) {
+  return {
+    ...publicList(row, counts),
+    isActive: row.is_active,
+    updatedAt: row.updated_at,
+  };
+}
+
+/* --- cursor --------------------------------------------------------------- */
+
 interface Cursor {
   p: number;
   t: string;
@@ -150,25 +177,34 @@ function decodeCursor(raw: string): Cursor | null {
   return null;
 }
 
-/**
- * Resolve a set of user ids to name/avatar (deduped). The display name is the
- * app's own `profiles.display_name` (one batched query), never the auth
- * `user_metadata`. The avatar still comes from auth metadata (Google etc.).
- */
+/* --- user resolution ------------------------------------------------------ */
+
 async function resolveUsers(ids: string[]) {
   const unique = [...new Set(ids)];
   const map = new Map<
     string,
-    { id: string; name: string | null; avatarUrl: string | null }
+    {
+      id: string;
+      name: string | null;
+      avatarUrl: string | null;
+      providers: string[];
+      createdAt: string | null;
+    }
   >();
   if (unique.length === 0) return map;
 
   const { data: profiles } = await admin()
     .from("profiles")
-    .select("id, display_name")
+    .select("id, display_name, created_at")
     .in("id", unique);
-  const names = new Map(
-    (profiles ?? []).map((p) => [p.id as string, (p.display_name as string | null) ?? null]),
+  const profileMap = new Map(
+    (profiles ?? []).map((p) => [
+      p.id as string,
+      {
+        name: (p.display_name as string | null) ?? null,
+        createdAt: (p.created_at as string | null) ?? null,
+      },
+    ]),
   );
 
   await Promise.all(
@@ -176,60 +212,115 @@ async function resolveUsers(ids: string[]) {
       const { data } = await admin().auth.admin.getUserById(id);
       const meta = data?.user?.user_metadata as Record<string, unknown> | undefined;
       const avatar = meta?.avatar_url ?? meta?.picture;
+      const identities = data?.user?.identities as { provider: string }[] | undefined;
+      const providers = Array.isArray(identities) ? identities.map((i) => i.provider) : [];
+      const profile = profileMap.get(id);
       map.set(id, {
         id,
-        name: names.get(id) ?? null,
+        name: profile?.name ?? null,
         avatarUrl: typeof avatar === "string" ? avatar : null,
+        providers,
+        createdAt: profile?.createdAt ?? null,
       });
     }),
   );
   return map;
 }
 
+/**
+ * Given a set of wishlist ids, return per-list totals: `items` counts active
+ * items (what the public sees), `reserved` counts anything that's been claimed
+ * (`reserved` or `confirmed` — from the owner's POV they're both "spoken for").
+ * One query, aggregated in-process; there are typically < 20 lists per user.
+ */
+async function resolveListCounts(listIds: string[]) {
+  const map = new Map<string, { items: number; reserved: number }>();
+  if (listIds.length === 0) return map;
+  const { data } = await admin()
+    .from("wishlist_items")
+    .select("wishlist_id, is_active, status")
+    .in("wishlist_id", listIds);
+  for (const id of listIds) map.set(id, { items: 0, reserved: 0 });
+  for (const row of (data ?? []) as { wishlist_id: string; is_active: boolean; status: string }[]) {
+    const c = map.get(row.wishlist_id);
+    if (!c) continue;
+    if (row.is_active) c.items++;
+    if (row.status === "reserved" || row.status === "confirmed") c.reserved++;
+  }
+  return map;
+}
+
 /* -------------------------------------------------------------------------- */
-/* validation schemas                                                          */
+/* validation                                                                  */
 /* -------------------------------------------------------------------------- */
 
 /**
- * An image URL must be one of ours — i.e. live under R2_PUBLIC_BASE_URL.
- * Otherwise a client could attach arbitrary external URLs and bypass our
- * own moderation/cleanup. When R2 is not configured the check is relaxed so
- * dev still works without images.
+ * An image URL must be one of ours (lives under R2_PUBLIC_BASE_URL) so we can
+ * clean it up in the nightly cron and can't be tricked into rendering arbitrary
+ * external images. When R2 isn't configured (local dev) we relax this.
  */
 const imageUrl = z.string().refine(
   (u) => {
     if (!u || typeof u !== "string") return false;
     const base = env.r2PublicBaseUrl;
-    if (!base) return true; // dev without R2 configured: accept anything
+    if (!base) return true;
     return u.startsWith(base + "/");
   },
   { message: "Image URL must be one served from our bucket" },
 );
 
-const createSchema = z.object({
+const createListSchema = z.object({
+  title: z.string().trim().min(1, "Title is required").max(120),
+  description: z.string().max(2000).optional().nullable(),
+  coverImageUrl: imageUrl.optional().nullable(),
+  isActive: z.boolean().optional(),
+  position: z.number().int().optional(),
+});
+const editListSchema = createListSchema.partial().refine((o) => Object.keys(o).length > 0, {
+  message: "Nothing to update",
+});
+
+const createItemSchema = z.object({
+  wishlistId: z.string().uuid("Wishlist is required"),
   title: z.string().trim().min(1, "Title is required").max(200),
   description: z.string().max(2000).optional().nullable(),
+  url: z
+    .string()
+    .trim()
+    .max(2048, "URL is too long")
+    .url("Enter a valid URL (starting with http:// or https://)")
+    .optional()
+    .nullable()
+    .or(z.literal("").transform(() => null)),
   price: z.number().nonnegative("Price can't be negative").optional().nullable(),
   currency: z.string().length(3, "Use a 3-letter currency code").optional(),
   position: z.number().int().optional(),
   isActive: z.boolean().optional(),
-  /** Ordered 0..2; cover at index 0. Cap is also enforced by a CHECK constraint. */
   images: z.array(imageUrl).max(3, "You can attach up to 3 images").optional(),
 });
+const editItemSchema = createItemSchema
+  .partial()
+  // Moving items between wishlists isn't supported in v1 — strip it if sent.
+  .omit({ wishlistId: true })
+  .refine((o) => Object.keys(o).length > 0, { message: "Nothing to update" });
 
-/** Body for the dedicated visibility toggle. */
 const activeSchema = z.object({ active: z.boolean() });
 
-// Edit: every field optional; at least one present.
-const editSchema = createSchema.partial().refine((o) => Object.keys(o).length > 0, {
-  message: "Nothing to update",
-});
-
-/** Map camelCase API fields → snake_case columns. */
-function toColumns(input: Partial<z.infer<typeof createSchema>>) {
+function listToColumns(input: Partial<z.infer<typeof createListSchema>>) {
   const out: Record<string, unknown> = {};
   if (input.title !== undefined) out.title = input.title;
   if (input.description !== undefined) out.description = input.description;
+  if (input.coverImageUrl !== undefined) out.cover_image_url = input.coverImageUrl;
+  if (input.isActive !== undefined) out.is_active = input.isActive;
+  if (input.position !== undefined) out.position = input.position;
+  return out;
+}
+
+function itemToColumns(input: Partial<z.infer<typeof createItemSchema>>) {
+  const out: Record<string, unknown> = {};
+  if (input.title !== undefined) out.title = input.title;
+  if (input.description !== undefined) out.description = input.description;
+  if (input.url !== undefined) out.url = input.url;
   if (input.price !== undefined) out.price = input.price;
   if (input.currency !== undefined) out.currency = input.currency;
   if (input.position !== undefined) out.position = input.position;
@@ -239,28 +330,85 @@ function toColumns(input: Partial<z.infer<typeof createSchema>>) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* session on every route                                                      */
+/* session                                                                     */
 /* -------------------------------------------------------------------------- */
 
 wishlist.use("*", loadSession);
 
-/* -------------------------------------------------------------------------- */
-/* GET /me  -> the caller's session (id, email, role) or null                  */
-/* -------------------------------------------------------------------------- */
 wishlist.get("/me", (c) => c.json({ user: c.get("user") }));
 
 /* -------------------------------------------------------------------------- */
-/* GET /items  -> public paginated list (infinite, keyset cursor)              */
+/* wishlists — public                                                          */
 /* -------------------------------------------------------------------------- */
+
+/** GET /wishlists?owner=  → a user's ACTIVE lists (public). */
+wishlist.get("/wishlists", async (c) => {
+  const owner = c.req.query("owner");
+  if (!owner) return fail(c, 400, "owner is required");
+
+  const { data, error } = await admin()
+    .from("wishlists")
+    .select(LIST_COLUMNS)
+    .eq("owner_id", owner)
+    .eq("is_active", true)
+    .order("position", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) return fail(c, 500, "Could not load wishlists");
+  const rows = data as ListRow[];
+  const counts = await resolveListCounts(rows.map((r) => r.id));
+  return c.json({ wishlists: rows.map((r) => publicList(r, counts.get(r.id))) });
+});
+
+/** GET /wishlists/:id → a single wishlist (404 if inactive to a non-owner). */
+wishlist.get("/wishlists/:id", async (c) => {
+  const { data, error } = await admin()
+    .from("wishlists")
+    .select(LIST_COLUMNS)
+    .eq("id", c.req.param("id"))
+    .maybeSingle();
+
+  if (error) return fail(c, 500, "Could not load the wishlist");
+  if (!data) return fail(c, 404, "Wishlist not found");
+  const row = data as ListRow;
+  const viewer = c.get("user");
+  const isOwner = viewer?.id === row.owner_id;
+  if (!row.is_active && !isOwner) return fail(c, 404, "Wishlist not found");
+  return c.json({ wishlist: isOwner ? adminList(row) : publicList(row) });
+});
+
+/* -------------------------------------------------------------------------- */
+/* items — public                                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * GET /items?wishlist=&cursor=&limit=  → items on a public list.
+ * The parent list must be active OR the caller must be its owner; otherwise
+ * we return 404 to hide even the list's existence from strangers.
+ */
 wishlist.get("/items", async (c) => {
-  const owner = c.req.query("owner") || env.wishlistOwnerId;
+  const wishlistId = c.req.query("wishlist");
+  if (!wishlistId) return fail(c, 400, "wishlist is required");
   const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 12), 1), 50);
   const cursorRaw = c.req.query("cursor");
+
+  const { data: parent, error: parentErr } = await admin()
+    .from("wishlists")
+    .select("id, owner_id, is_active")
+    .eq("id", wishlistId)
+    .maybeSingle();
+  if (parentErr) return fail(c, 500, "Could not load the wishlist");
+  if (!parent) return fail(c, 404, "Wishlist not found");
+  const viewer = c.get("user");
+  const isOwner = viewer?.id === (parent as { owner_id: string }).owner_id;
+  if (!(parent as { is_active: boolean }).is_active && !isOwner) {
+    return fail(c, 404, "Wishlist not found");
+  }
 
   let query = admin()
     .from("wishlist_items")
     .select(ITEM_COLUMNS)
-    .eq("owner_id", owner)
+    .eq("wishlist_id", wishlistId)
     .eq("is_active", true)
     .order("position", { ascending: false })
     .order("created_at", { ascending: false })
@@ -280,22 +428,17 @@ wishlist.get("/items", async (c) => {
 
   const { data, error } = await query;
   if (error) return fail(c, 500, "Could not load the wishlist");
-
   const rows = (data ?? []) as ItemRow[];
   const hasMore = rows.length > limit;
   const page = hasMore ? rows.slice(0, limit) : rows;
   const nextCursor = hasMore ? encodeCursor(page[page.length - 1]!) : null;
-
-  const viewer = c.get("user");
   return c.json({
     items: page.map((r) => publicItem(r, viewer)),
     nextCursor,
   });
 });
 
-/* -------------------------------------------------------------------------- */
-/* GET /items/:id  -> single public item                                       */
-/* -------------------------------------------------------------------------- */
+/** GET /items/:id → a single item (404 if its list is inactive to non-owner). */
 wishlist.get("/items/:id", async (c) => {
   const { data, error } = await admin()
     .from("wishlist_items")
@@ -307,13 +450,26 @@ wishlist.get("/items/:id", async (c) => {
   if (!data) return fail(c, 404, "Item not found");
   const row = data as ItemRow;
   const viewer = c.get("user");
-  if (!row.is_active && row.owner_id !== viewer?.id) return fail(c, 404, "Item not found");
+  const isOwner = viewer?.id === row.owner_id;
+
+  // Hide inactive items and items whose parent list is inactive from non-owners.
+  if (!row.is_active && !isOwner) return fail(c, 404, "Item not found");
+  const { data: parent } = await admin()
+    .from("wishlists")
+    .select("is_active")
+    .eq("id", row.wishlist_id)
+    .maybeSingle();
+  if (!parent || (!(parent as { is_active: boolean }).is_active && !isOwner)) {
+    return fail(c, 404, "Item not found");
+  }
+
   return c.json({ item: publicItem(row, viewer) });
 });
 
 /* -------------------------------------------------------------------------- */
-/* GET /me/reservations  -> the caller's own reservations (full)               */
+/* reservations                                                                */
 /* -------------------------------------------------------------------------- */
+
 wishlist.get("/me/reservations", requireUser, async (c) => {
   const user = c.get("user")!;
   const { data, error } = await admin()
@@ -333,9 +489,6 @@ wishlist.get("/me/reservations", requireUser, async (c) => {
   return c.json({ items });
 });
 
-/* -------------------------------------------------------------------------- */
-/* POST /items/:id/reserve  -> reserve an available item                       */
-/* -------------------------------------------------------------------------- */
 wishlist.post("/items/:id/reserve", requireUser, async (c) => {
   const user = c.get("user")!;
   const id = c.req.param("id");
@@ -352,7 +505,7 @@ wishlist.post("/items/:id/reserve", requireUser, async (c) => {
   if (row.owner_id === user.id) return fail(c, 400, "You can't reserve from your own wishlist");
   if (!row.is_active) return fail(c, 409, "This item is not available");
   if (row.status === "reserved" || row.status === "confirmed") {
-    if (row.reserved_by === user.id) return c.json({ item: publicItem(row, user) }); // idempotent
+    if (row.reserved_by === user.id) return c.json({ item: publicItem(row, user) });
     return fail(c, 409, "This item is already reserved");
   }
   if (row.status === "declined") return fail(c, 409, "This item is not available");
@@ -370,9 +523,6 @@ wishlist.post("/items/:id/reserve", requireUser, async (c) => {
   return c.json({ item: publicItem(data as ItemRow, user) });
 });
 
-/* -------------------------------------------------------------------------- */
-/* DELETE /items/:id/reserve  -> cancel the caller's own reservation           */
-/* -------------------------------------------------------------------------- */
 wishlist.delete("/items/:id/reserve", requireUser, async (c) => {
   const user = c.get("user")!;
   const id = c.req.param("id");
@@ -391,28 +541,134 @@ wishlist.delete("/items/:id/reserve", requireUser, async (c) => {
   return c.json({ item: publicItem(data as ItemRow, user) });
 });
 
-/* -------------------------------------------------------------------------- */
-/* GET /users/:id  -> a user's public profile (display name only, no email)    */
-/* -------------------------------------------------------------------------- */
-wishlist.get("/users/:id", async (c) => {
-  const id = c.req.param("id");
-  const resolved = (await resolveUsers([id])).get(id);
-  return c.json({
-    user: { id, name: resolved?.name ?? null, avatarUrl: resolved?.avatarUrl ?? null },
-  });
+/* ========================================================================== */
+/* manage — the caller's OWN wishlists + items                                 */
+/* ========================================================================== */
+
+/* --- wishlists ------------------------------------------------------------ */
+
+/** GET /manage/wishlists → all of the caller's lists, active + inactive. */
+wishlist.get("/manage/wishlists", requireUser, async (c) => {
+  const user = c.get("user")!;
+  const { data, error } = await admin()
+    .from("wishlists")
+    .select(LIST_COLUMNS)
+    .eq("owner_id", user.id)
+    .order("position", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (error) return fail(c, 500, "Could not load your wishlists");
+  const rows = data as ListRow[];
+  const counts = await resolveListCounts(rows.map((r) => r.id));
+  return c.json({ wishlists: rows.map((r) => adminList(r, counts.get(r.id))) });
 });
 
-/* ========================================================================== */
-/* Manage — the caller's OWN wishlist                                          */
-/* ========================================================================== */
+/** POST /manage/wishlists → create a new list on the caller's account. */
+wishlist.post("/manage/wishlists", requireUser, async (c) => {
+  const user = c.get("user")!;
+  const parsed = await parseBody(c, createListSchema);
+  if (!parsed.ok) return fail(c, 400, parsed.error, parsed.fields);
 
-/* GET /manage/items  -> the caller's own list incl. reserver identity         */
+  const { data, error } = await admin()
+    .from("wishlists")
+    .insert({ ...listToColumns(parsed.data), owner_id: user.id })
+    .select(LIST_COLUMNS)
+    .single();
+
+  if (error) return fail(c, 500, "Could not create the wishlist");
+  return c.json({ wishlist: adminList(data as ListRow) }, 201);
+});
+
+/** PATCH /manage/wishlists/:id → edit one of the caller's lists. */
+wishlist.patch("/manage/wishlists/:id", requireUser, async (c) => {
+  const user = c.get("user")!;
+  const parsed = await parseBody(c, editListSchema);
+  if (!parsed.ok) return fail(c, 400, parsed.error, parsed.fields);
+
+  const { data, error } = await admin()
+    .from("wishlists")
+    .update(listToColumns(parsed.data))
+    .eq("id", c.req.param("id"))
+    .eq("owner_id", user.id)
+    .select(LIST_COLUMNS)
+    .maybeSingle();
+
+  if (error) return fail(c, 500, "Could not update the wishlist");
+  if (!data) return fail(c, 404, "Wishlist not found");
+  return c.json({ wishlist: adminList(data as ListRow) });
+});
+
+/** POST /manage/wishlists/:id/active → activate / deactivate. */
+wishlist.post("/manage/wishlists/:id/active", requireUser, async (c) => {
+  const user = c.get("user")!;
+  const parsed = await parseBody(c, activeSchema);
+  if (!parsed.ok) return fail(c, 400, parsed.error, parsed.fields);
+
+  const { data, error } = await admin()
+    .from("wishlists")
+    .update({ is_active: parsed.data.active })
+    .eq("id", c.req.param("id"))
+    .eq("owner_id", user.id)
+    .select(LIST_COLUMNS)
+    .maybeSingle();
+
+  if (error || !data) return fail(c, 404, "Wishlist not found");
+  return c.json({ wishlist: adminList(data as ListRow) });
+});
+
+/**
+ * DELETE /manage/wishlists/:id → delete a list (and its items via ON DELETE
+ * CASCADE). Refuse if any item is mid-gift (reserved or confirmed): those are
+ * commitments to other users; the owner should decline/deactivate first.
+ */
+wishlist.delete("/manage/wishlists/:id", requireUser, async (c) => {
+  const user = c.get("user")!;
+  const id = c.req.param("id");
+
+  const { data: existing, error: readErr } = await admin()
+    .from("wishlists")
+    .select("id")
+    .eq("id", id)
+    .eq("owner_id", user.id)
+    .maybeSingle();
+  if (readErr) return fail(c, 500, "Could not delete the wishlist");
+  if (!existing) return fail(c, 404, "Wishlist not found");
+
+  const { count } = await admin()
+    .from("wishlist_items")
+    .select("id", { count: "exact", head: true })
+    .eq("wishlist_id", id)
+    .in("status", ["reserved", "confirmed"]);
+  if ((count ?? 0) > 0) {
+    return fail(
+      c,
+      409,
+      "This wishlist has reserved or gifted items — decline the reservations first, or just deactivate it.",
+    );
+  }
+
+  const { error } = await admin()
+    .from("wishlists")
+    .delete()
+    .eq("id", id)
+    .eq("owner_id", user.id);
+  if (error) return fail(c, 500, "Could not delete the wishlist");
+  return c.json({ ok: true });
+});
+
+/* --- items ---------------------------------------------------------------- */
+
+/** GET /manage/items?wishlist=  → the caller's items on one of their lists. */
 wishlist.get("/manage/items", requireUser, async (c) => {
   const user = c.get("user")!;
+  const wishlistId = c.req.query("wishlist");
+  if (!wishlistId) return fail(c, 400, "wishlist is required");
+
   const { data, error } = await admin()
     .from("wishlist_items")
     .select(ITEM_COLUMNS)
     .eq("owner_id", user.id)
+    .eq("wishlist_id", wishlistId)
     .order("position", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -426,15 +682,29 @@ wishlist.get("/manage/items", requireUser, async (c) => {
   });
 });
 
-/* POST /manage/items  -> create on the caller's own list                      */
+/** POST /manage/items → create on one of the caller's lists. */
 wishlist.post("/manage/items", requireUser, async (c) => {
   const user = c.get("user")!;
-  const parsed = await parseBody(c, createSchema);
+  const parsed = await parseBody(c, createItemSchema);
   if (!parsed.ok) return fail(c, 400, parsed.error, parsed.fields);
+
+  // Verify the target list belongs to the caller. The DB trigger would also
+  // reject on owner mismatch, but a clean 404 is friendlier than a 500.
+  const { data: parent } = await admin()
+    .from("wishlists")
+    .select("id")
+    .eq("id", parsed.data.wishlistId)
+    .eq("owner_id", user.id)
+    .maybeSingle();
+  if (!parent) return fail(c, 404, "Wishlist not found");
 
   const { data, error } = await admin()
     .from("wishlist_items")
-    .insert({ ...toColumns(parsed.data), owner_id: user.id })
+    .insert({
+      ...itemToColumns(parsed.data),
+      owner_id: user.id,
+      wishlist_id: parsed.data.wishlistId,
+    })
     .select(ITEM_COLUMNS)
     .single();
 
@@ -442,20 +712,15 @@ wishlist.post("/manage/items", requireUser, async (c) => {
   return c.json({ item: adminItem(data as ItemRow, null) }, 201);
 });
 
-/* PATCH /manage/items/:id  -> edit (only your own item)                       */
-/* Reserved items are mid-gift and gifted items are a closed record — both are */
-/* locked from editing. The status filter is in the UPDATE so the gating is    */
-/* atomic with the write.                                                      */
 wishlist.patch("/manage/items/:id", requireUser, async (c) => {
   const user = c.get("user")!;
-  const parsed = await parseBody(c, editSchema);
+  const parsed = await parseBody(c, editItemSchema);
   if (!parsed.ok) return fail(c, 400, parsed.error, parsed.fields);
 
   const id = c.req.param("id");
-
   const { data, error } = await admin()
     .from("wishlist_items")
-    .update(toColumns(parsed.data))
+    .update(itemToColumns(parsed.data))
     .eq("id", id)
     .eq("owner_id", user.id)
     .not("status", "in", "(reserved,confirmed)")
@@ -464,7 +729,6 @@ wishlist.patch("/manage/items/:id", requireUser, async (c) => {
 
   if (error) return fail(c, 500, "Could not update the item");
   if (!data) {
-    // Disambiguate: was it "not your item" vs "locked by status"?
     const { data: existing } = await admin()
       .from("wishlist_items")
       .select("status")
@@ -477,11 +741,12 @@ wishlist.patch("/manage/items/:id", requireUser, async (c) => {
     return fail(c, 500, "Could not update the item");
   }
   const row = data as ItemRow;
-  const reserver = row.reserved_by ? (await resolveUsers([row.reserved_by])).get(row.reserved_by) ?? null : null;
+  const reserver = row.reserved_by
+    ? (await resolveUsers([row.reserved_by])).get(row.reserved_by) ?? null
+    : null;
   return c.json({ item: adminItem(row, reserver) });
 });
 
-/* DELETE /manage/items/:id  -> delete (only your own item)                    */
 wishlist.delete("/manage/items/:id", requireUser, async (c) => {
   const user = c.get("user")!;
   const id = c.req.param("id");
@@ -498,14 +763,11 @@ wishlist.delete("/manage/items/:id", requireUser, async (c) => {
     return fail(c, 409, "Gifted items can't be deleted — deactivate it instead");
   if (existing.status === "reserved") return fail(c, 409, "Can't delete a reserved item");
 
-  // Image objects in R2 are cleaned up by the nightly orphan-cleanup cron — a
-  // best-effort sync delete here would slow the request and isn't necessary.
   const { error } = await admin().from("wishlist_items").delete().eq("id", id).eq("owner_id", user.id);
   if (error) return fail(c, 500, "Could not delete the item");
   return c.json({ ok: true });
 });
 
-/* POST /manage/items/:id/active  -> show/hide an item on your own list         */
 wishlist.post("/manage/items/:id/active", requireUser, async (c) => {
   const user = c.get("user")!;
   const id = c.req.param("id");
@@ -539,7 +801,6 @@ wishlist.post("/manage/items/:id/active", requireUser, async (c) => {
   return c.json({ item: adminItem(row, reserver) });
 });
 
-/* POST /manage/items/:id/confirm  -> reserved -> confirmed (gift presented)   */
 wishlist.post("/manage/items/:id/confirm", requireUser, async (c) => {
   const user = c.get("user")!;
   const { data, error } = await admin()
@@ -554,11 +815,12 @@ wishlist.post("/manage/items/:id/confirm", requireUser, async (c) => {
   if (error) return fail(c, 500, "Could not confirm the item");
   if (!data) return fail(c, 409, "Only a reserved item on your list can be confirmed");
   const row = data as ItemRow;
-  const reserver = row.reserved_by ? (await resolveUsers([row.reserved_by])).get(row.reserved_by) ?? null : null;
+  const reserver = row.reserved_by
+    ? (await resolveUsers([row.reserved_by])).get(row.reserved_by) ?? null
+    : null;
   return c.json({ item: adminItem(row, reserver) });
 });
 
-/* POST /manage/items/:id/decline  -> reserved -> available (release)          */
 wishlist.post("/manage/items/:id/decline", requireUser, async (c) => {
   const user = c.get("user")!;
   const { data, error } = await admin()
@@ -576,13 +838,12 @@ wishlist.post("/manage/items/:id/decline", requireUser, async (c) => {
 });
 
 /* -------------------------------------------------------------------------- */
-/* Image staging upload                                                        */
+/* image staging (shared by item images + wishlist covers)                     */
 /*                                                                             */
 /* The form uploads each cropped image (≤300KB WebP/JPEG/PNG) here *before*    */
-/* submitting the item. The response carries the public URL the client then    */
-/* puts into the item's `images` array. The object isn't yet associated with   */
-/* any row — if the user closes the form, the nightly cron sweeps it up after  */
-/* the 24h grace window.                                                      */
+/* submitting the parent record. The response carries the public URL; the      */
+/* client puts it into `images[]` (for items) or `coverImageUrl` (for lists).  */
+/* If never attached, the nightly cron reaps it after the 24h grace window.    */
 /* -------------------------------------------------------------------------- */
 
 const IMAGE_MAX_BYTES = 300 * 1024;
@@ -605,8 +866,6 @@ wishlist.post("/manage/images/upload", requireUser, async (c) => {
     return fail(c, 413, "Image must be 300KB or smaller after cropping.");
   }
 
-  // Random UUID filename, not under a user-specific path — bucket can't be
-  // enumerated by user and there's no item id yet.
   const key = `wishlist/${crypto.randomUUID()}.${ext}`;
   try {
     await putObject(key, body, contentType);
@@ -618,11 +877,11 @@ wishlist.post("/manage/images/upload", requireUser, async (c) => {
 });
 
 /* -------------------------------------------------------------------------- */
-/* Orphan-image cleanup (admin/cron)                                           */
+/* orphan-image cleanup                                                        */
 /*                                                                             */
-/* Lists every object under `wishlist/` in R2 and deletes those NOT referenced */
-/* by any row's `images` array. A 24h grace window protects staged uploads     */
-/* (form open, item not yet submitted) and uploads in flight during the run.   */
+/* Lists every object under `wishlist/` and deletes the ones NOT referenced by */
+/* any item row's `images` array OR any wishlist row's `cover_image_url`. A    */
+/* 24h grace window protects staged uploads (form open, record not submitted). */
 /* -------------------------------------------------------------------------- */
 
 const ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000;
@@ -634,18 +893,22 @@ export async function cleanupOrphanImages(): Promise<{
 }> {
   if (!r2Configured()) throw new Error("R2 not configured");
 
-  const [objects, { data: rows }] = await Promise.all([
+  const [objects, itemsRes, listsRes] = await Promise.all([
     listObjects("wishlist/"),
     admin().from("wishlist_items").select("images"),
+    admin().from("wishlists").select("cover_image_url"),
   ]);
 
-  // Collect every referenced key from the `images` arrays (urls → keys).
   const referenced = new Set<string>();
-  for (const row of (rows ?? []) as { images: string[] | null }[]) {
+  for (const row of (itemsRes.data ?? []) as { images: string[] | null }[]) {
     for (const url of row.images ?? []) {
       const key = keyFromPublicUrl(url);
       if (key) referenced.add(key);
     }
+  }
+  for (const row of (listsRes.data ?? []) as { cover_image_url: string | null }[]) {
+    const key = keyFromPublicUrl(row.cover_image_url);
+    if (key) referenced.add(key);
   }
 
   const cutoff = Date.now() - ORPHAN_GRACE_MS;
@@ -655,7 +918,7 @@ export async function cleanupOrphanImages(): Promise<{
     if (referenced.has(obj.key)) continue;
     const age = Date.parse(obj.lastModified);
     if (Number.isFinite(age) && age > cutoff) {
-      skipped++; // within grace window
+      skipped++;
       continue;
     }
     try {
@@ -669,7 +932,6 @@ export async function cleanupOrphanImages(): Promise<{
   return { scanned: objects.length, deleted, skipped };
 }
 
-/* POST /admin/cleanup-orphan-images  -> manual trigger (shared secret header) */
 wishlist.post("/admin/cleanup-orphan-images", async (c) => {
   const expected = env.imageCleanupSecret;
   if (!expected) return fail(c, 503, "Cleanup is not configured.");

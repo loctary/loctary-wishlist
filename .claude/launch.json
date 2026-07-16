@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "wishlist-server",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@loctary/wishlist-server", "run", "dev"],
+      "port": 3003
+    },
+    {
+      "name": "wishlist-web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@loctary/wishlist-web", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}

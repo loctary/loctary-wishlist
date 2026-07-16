@@ -10,6 +10,9 @@ import viteReact from "@vitejs/plugin-react";
  * SSR. So there is no `@module-federation/vite` here.
  */
 export default defineConfig({
+  // VITE_* vars live in the repo-root .env.local (shared across apps/*), not
+  // in this package — point Vite there instead of its default (this dir).
+  envDir: "../..",
   server: { port: 3000 },
   plugins: [tanstackStart(), viteReact()],
 });
