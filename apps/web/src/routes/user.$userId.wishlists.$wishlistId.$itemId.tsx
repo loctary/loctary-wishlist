@@ -27,6 +27,7 @@ import { ImageCarousel } from "../components/ImageCarousel";
 import { NotFoundScreen } from "../components/NotFoundScreen";
 import { OwnerItemActions } from "../components/OwnerItemActions";
 import { ReserveButton } from "../components/ReserveButton";
+import { ShareButton } from "../components/ShareButton";
 import { UserLink } from "../components/UserLink";
 
 export const Route = createFileRoute("/user/$userId/wishlists/$wishlistId/$itemId")({
@@ -123,13 +124,19 @@ function ItemPage() {
               fg={tint.fg}
             />
           </Card.Section>
-          <Group justify="space-between" align="flex-start">
+          <Group justify="space-between" align="flex-start" wrap="nowrap">
             <Title order={2}>{item.title}</Title>
-            {badge && (
-              <Badge color={badge.color} variant="light">
-                {badge.label}
-              </Badge>
-            )}
+            <Group gap="xs" wrap="nowrap" align="center">
+              {badge && (
+                <Badge color={badge.color} variant="light">
+                  {badge.label}
+                </Badge>
+              )}
+              <ShareButton
+                variant="icon"
+                path={`/user/${userId}/wishlists/${wishlistId}/${itemId}`}
+              />
+            </Group>
           </Group>
           <Text size="sm" c="dimmed">
             From{" "}

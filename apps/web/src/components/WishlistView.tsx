@@ -17,6 +17,7 @@ import { useSession } from "../lib/session";
 import { useWishlistUser } from "../lib/user";
 import { NotFoundScreen } from "./NotFoundScreen";
 import { OwnerWishlist } from "./OwnerWishlist";
+import { ShareButton } from "./ShareButton";
 import { WishlistGrid } from "./WishlistGrid";
 
 /**
@@ -94,6 +95,7 @@ function VisitorWishlist({
               <Title order={1} style={{ letterSpacing: "-0.03em" }}>
                 {list.title}
               </Title>
+              <ShareButton path={`/user/${userId}/wishlists/${wishlistId}`} />
             </Group>
             {list.description && (
               <Text c="dimmed" mt={6}>

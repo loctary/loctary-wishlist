@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { IconChevronLeft, IconChevronRight, IconGift } from "@tabler/icons-react";
 
 /**
@@ -15,11 +15,14 @@ export function ImageCarousel({
   alt,
   bg,
   fg,
+  icon,
 }: {
   images: string[];
   alt: string;
   bg: string;
   fg: string;
+  /** Empty-state glyph shown over the tint when there are no images. */
+  icon?: ReactNode;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
@@ -60,7 +63,7 @@ export function ImageCarousel({
   if (images.length === 0) {
     return (
       <div className="wl-cover" style={{ background: bg, color: fg }}>
-        <IconGift size={54} style={{ color: fg }} />
+        {icon ?? <IconGift size={54} style={{ color: fg }} />}
       </div>
     );
   }
