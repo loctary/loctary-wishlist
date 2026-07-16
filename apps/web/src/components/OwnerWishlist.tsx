@@ -28,6 +28,7 @@ import {
 import { ItemForm } from "./ItemForm";
 import { NotFoundScreen } from "./NotFoundScreen";
 import { OwnerItemActions } from "./OwnerItemActions";
+import { ShareButton } from "./ShareButton";
 import { WishlistCard } from "./WishlistCard";
 
 /**
@@ -125,12 +126,19 @@ export function OwnerWishlist({ wishlistId }: { wishlistId: string }) {
               </Text>
             )}
           </div>
-          <Button
-            leftSection={<IconPlus size={16} />}
-            onClick={formHandlers.open}
-          >
-            Add item
-          </Button>
+          <Group gap="xs" wrap="nowrap">
+            <ShareButton
+              path={`/user/${list.ownerId}/wishlists/${list.id}`}
+              disabled={!list.isActive}
+              disabledReason="Hidden wishlists can't be shared — make it public first"
+            />
+            <Button
+              leftSection={<IconPlus size={16} />}
+              onClick={formHandlers.open}
+            >
+              Add item
+            </Button>
+          </Group>
         </Group>
       </Stack>
 

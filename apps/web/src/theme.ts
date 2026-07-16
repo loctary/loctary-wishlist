@@ -41,6 +41,8 @@ export const theme = createTheme({
   primaryColor: "amber",
   primaryShade: { light: 6, dark: 5 },
   colors: { amber, moss },
+  // Switches/checkboxes/radios show a pointer cursor like buttons do.
+  cursorType: "pointer",
   defaultRadius: "md",
   radius: { xs: "6px", sm: "8px", md: "12px", lg: "16px", xl: "24px" },
   shadows: {
