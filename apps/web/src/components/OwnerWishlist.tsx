@@ -26,6 +26,7 @@ import {
   type ItemInput,
 } from "../lib/api";
 import { ItemForm } from "./ItemForm";
+import { NotFoundScreen } from "./NotFoundScreen";
 import { OwnerItemActions } from "./OwnerItemActions";
 import { WishlistCard } from "./WishlistCard";
 
@@ -66,12 +67,26 @@ export function OwnerWishlist({ wishlistId }: { wishlistId: string }) {
   });
 
   const items = itemsQuery.data?.items ?? [];
-  const list = listQuery.data?.wishlist as AdminWishlist | undefined;
+
+  // Full-screen loader until the list itself resolves — rendering the header
+  // from partial data flashes a placeholder title before the real one.
+  if (listQuery.isLoading) {
+    return (
+      <Center style={{ flex: 1, width: "100%" }}>
+        <Loader />
+      </Center>
+    );
+  }
+  if (listQuery.isError || !listQuery.data) {
+    return <NotFoundScreen kind="wishlist" />;
+  }
+
+  const list = listQuery.data.wishlist as AdminWishlist;
 
   return (
     <Container size="lg" py="xl" w="100%">
       <Stack gap="md" mb="xl">
-        {list?.coverImageUrl && (
+        {list.coverImageUrl && (
           <Box
             style={{
               aspectRatio: "12 / 4",
@@ -86,7 +101,7 @@ export function OwnerWishlist({ wishlistId }: { wishlistId: string }) {
               renderRoot={(props) => (
                 <Link
                   to="/user/$userId"
-                  params={{ userId: list?.ownerId ?? "" }}
+                  params={{ userId: list.ownerId }}
                   {...props}
                 />
               )}
@@ -97,14 +112,14 @@ export function OwnerWishlist({ wishlistId }: { wishlistId: string }) {
               </Group>
             </Anchor>
             <Title order={1} style={{ letterSpacing: "-0.03em" }}>
-              {list?.title ?? "Your wishlist"}
+              {list.title}
             </Title>
-            {list?.description && (
+            {list.description && (
               <Text c="dimmed" mt={4}>
                 {list.description}
               </Text>
             )}
-            {list && !list.isActive && (
+            {!list.isActive && (
               <Text size="xs" c="orange" mt={4}>
                 This wishlist is deactivated — only you can see it.
               </Text>

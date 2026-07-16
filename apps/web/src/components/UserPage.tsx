@@ -45,6 +45,7 @@ import {
 import { useSession } from "../lib/session";
 import { tintFor } from "../lib/tint";
 import { useWishlistUser } from "../lib/user";
+import { NotFoundScreen } from "./NotFoundScreen";
 import { WishlistFormModal } from "./WishlistFormModal";
 
 /**
@@ -254,11 +255,7 @@ function VisitorUserPage({ userId }: { userId: string }) {
     );
   }
   if (userError || !user) {
-    return (
-      <Center style={{ flex: 1, width: "100%" }}>
-        <Text c="dimmed">This user couldn&apos;t be found.</Text>
-      </Center>
-    );
+    return <NotFoundScreen kind="user" />;
   }
 
   const name = user.name ?? "User without a name";

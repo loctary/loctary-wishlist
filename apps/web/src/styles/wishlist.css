@@ -147,6 +147,116 @@
   z-index: 3;
 }
 
+/* ---- 404 screen (NotFoundScreen.tsx) ---- */
+.nf-main {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 40px 24px 80px;
+}
+.nf-inner {
+  width: 100%;
+  max-width: 560px;
+  text-align: center;
+}
+
+/* Brand graphic: a wishlist card with a gift "lost" off it. */
+.nf-art {
+  position: relative;
+  width: 220px;
+  height: 180px;
+  margin: 0 auto 36px;
+}
+.nf-card {
+  position: absolute;
+  inset: 0 28px 0 0;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transform: rotate(-4deg);
+}
+.nf-cover {
+  flex: 1;
+  /* primary-soft (not raw amber-1) so the cover follows dark mode. */
+  background: var(--color-primary-soft);
+  display: grid;
+  place-items: center;
+}
+.nf-cover .q {
+  font-size: 64px;
+  font-weight: var(--fw-extrabold);
+  color: var(--amber-4);
+  letter-spacing: -0.04em;
+}
+.nf-lines {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.nf-line {
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-border);
+}
+.nf-line.short {
+  width: 55%;
+}
+.nf-tag {
+  position: absolute;
+  right: 0;
+  bottom: 18px;
+  background: var(--color-secondary);
+  color: var(--text-on-secondary);
+  font-weight: var(--fw-bold);
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-md);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transform: rotate(7deg);
+}
+
+.nf-code {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+}
+.nf-title {
+  font-size: clamp(30px, 6vw, 44px);
+  font-weight: var(--fw-extrabold);
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+  margin: 0 0 14px;
+  color: var(--text-primary);
+}
+.nf-sub {
+  font-size: 16.5px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  max-width: 42ch;
+  margin: 0 auto 28px;
+}
+.nf-links {
+  margin-top: 30px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+.nf-links .dot {
+  margin: 0 10px;
+  opacity: 0.5;
+}
+
 /* Owner-section avatar on the Reserved page. */
 .wl-owner-avatar {
   width: 36px;

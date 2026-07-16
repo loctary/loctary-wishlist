@@ -15,6 +15,7 @@ import { IconArrowLeft } from "@tabler/icons-react";
 import { getWishlist } from "../lib/api";
 import { useSession } from "../lib/session";
 import { useWishlistUser } from "../lib/user";
+import { NotFoundScreen } from "./NotFoundScreen";
 import { OwnerWishlist } from "./OwnerWishlist";
 import { WishlistGrid } from "./WishlistGrid";
 
@@ -58,11 +59,7 @@ function VisitorWishlist({
     );
   }
   if (listQuery.isError || !listQuery.data) {
-    return (
-      <Center style={{ flex: 1, width: "100%" }}>
-        <Text c="dimmed">This wishlist couldn&apos;t be found.</Text>
-      </Center>
-    );
+    return <NotFoundScreen kind="wishlist" />;
   }
 
   const list = listQuery.data.wishlist;

@@ -24,6 +24,7 @@ import { useSession } from "../lib/session";
 import { useWishlistUser } from "../lib/user";
 import { tintFor } from "../lib/tint";
 import { ImageCarousel } from "../components/ImageCarousel";
+import { NotFoundScreen } from "../components/NotFoundScreen";
 import { OwnerItemActions } from "../components/OwnerItemActions";
 import { ReserveButton } from "../components/ReserveButton";
 import { UserLink } from "../components/UserLink";
@@ -68,6 +69,32 @@ function ItemPage() {
   });
   const adminItem: AdminWishItem | undefined = manageQuery.data?.items.find((i) => i.id === itemId);
 
+  // Bare loader while the item resolves — no back link yet, so a slow (or
+  // failing) load can't flash a stale or generic wishlist name.
+  if (query.isLoading) {
+    return (
+      <Center style={{ flex: 1, width: "100%" }}>
+        <Loader />
+      </Center>
+    );
+  }
+  // Unknown item → the brand 404 (context-free: the list may be hidden and
+  // its name must not leak).
+  if (query.isError || !query.data) {
+    return <NotFoundScreen kind="item" />;
+  }
+
+  const item = query.data.item;
+  const badge = STATUS[item.status];
+  const tint = tintFor(item.id);
+  const price =
+    item.price == null
+      ? null
+      : new Intl.NumberFormat(undefined, {
+          style: "currency",
+          currency: item.currency,
+        }).format(item.price);
+
   return (
     <Container size="sm" py="xl" w="100%">
       <Anchor
@@ -86,108 +113,79 @@ function ItemPage() {
         </Group>
       </Anchor>
 
-      {query.isLoading ? (
-        <Center mih="40vh">
-          <Loader />
-        </Center>
-      ) : query.isError || !query.data ? (
-        <Center mih="40vh">
-          <Stack align="center">
-            <Text c="dimmed">This item couldn&apos;t be found.</Text>
-            <Anchor component={Link} to="/">
-              Go home
+      <Card withBorder radius="lg" padding="lg" shadow="sm" pt={0}>
+        <Stack>
+          <Card.Section>
+            <ImageCarousel
+              images={item.images}
+              alt={item.title}
+              bg={tint.bg}
+              fg={tint.fg}
+            />
+          </Card.Section>
+          <Group justify="space-between" align="flex-start">
+            <Title order={2}>{item.title}</Title>
+            {badge && (
+              <Badge color={badge.color} variant="light">
+                {badge.label}
+              </Badge>
+            )}
+          </Group>
+          <Text size="sm" c="dimmed">
+            From{" "}
+            <UserLink id={item.ownerId} name={ownerName ?? "this user"} />
+            {"'s "}
+            <Anchor
+              renderRoot={(props) => (
+                <Link
+                  to="/user/$userId/wishlists/$wishlistId"
+                  params={{ userId, wishlistId }}
+                  {...props}
+                />
+              )}
+              inherit
+            >
+              {listTitle}
             </Anchor>
-          </Stack>
-        </Center>
-      ) : (
-        (() => {
-          const item = query.data.item;
-          const badge = STATUS[item.status];
-          const tint = tintFor(item.id);
-          const price =
-            item.price == null
-              ? null
-              : new Intl.NumberFormat(undefined, {
-                  style: "currency",
-                  currency: item.currency,
-                }).format(item.price);
-          return (
-            <Card withBorder radius="lg" padding="lg" shadow="sm" pt={0}>
-              <Stack>
-                <Card.Section>
-                  <ImageCarousel
-                    images={item.images}
-                    alt={item.title}
-                    bg={tint.bg}
-                    fg={tint.fg}
-                  />
-                </Card.Section>
-                <Group justify="space-between" align="flex-start">
-                  <Title order={2}>{item.title}</Title>
-                  {badge && (
-                    <Badge color={badge.color} variant="light">
-                      {badge.label}
-                    </Badge>
-                  )}
-                </Group>
-                <Text size="sm" c="dimmed">
-                  From{" "}
-                  <UserLink id={item.ownerId} name={ownerName ?? "this user"} />
-                  {"'s "}
-                  <Anchor
-                    renderRoot={(props) => (
-                      <Link
-                        to="/user/$userId/wishlists/$wishlistId"
-                        params={{ userId, wishlistId }}
-                        {...props}
-                      />
-                    )}
-                    inherit
-                  >
-                    {listTitle}
-                  </Anchor>
-                </Text>
-                {item.description && <Text>{item.description}</Text>}
-                {item.url && (
-                  <Anchor
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer nofollow"
-                  >
-                    <Group gap={6} wrap="nowrap" align="center">
-                      <IconExternalLink size={16} /> View product page
-                    </Group>
-                  </Anchor>
-                )}
-                {price && (
-                  <Text fw={700} size="lg">
-                    {price}
-                  </Text>
-                )}
-                {isOwner ? (
-                  adminItem ? (
-                    <OwnerItemActions
-                      item={adminItem}
-                      onDeleted={() =>
-                        router.navigate({
-                          to: "/user/$userId/wishlists/$wishlistId",
-                          params: { userId, wishlistId },
-                        })
-                      }
-                    />
-                  ) : (
-                    <Center>
-                      <Loader size="sm" />
-                    </Center>
-                  )
-                ) : (
-                  <ReserveButton item={item} />
-                )}
-              </Stack>
-            </Card>
-          );
-        })()
-      )}
+          </Text>
+          {item.description && <Text>{item.description}</Text>}
+          {item.url && (
+            <Anchor
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer nofollow"
+            >
+              <Group gap={6} wrap="nowrap" align="center">
+                <IconExternalLink size={16} /> View product page
+              </Group>
+            </Anchor>
+          )}
+          {price && (
+            <Text fw={700} size="lg">
+              {price}
+            </Text>
+          )}
+          {isOwner ? (
+            adminItem ? (
+              <OwnerItemActions
+                item={adminItem}
+                onDeleted={() =>
+                  router.navigate({
+                    to: "/user/$userId/wishlists/$wishlistId",
+                    params: { userId, wishlistId },
+                  })
+                }
+              />
+            ) : (
+              <Center>
+                <Loader size="sm" />
+              </Center>
+            )
+          ) : (
+            <ReserveButton item={item} />
+          )}
+        </Stack>
+      </Card>
     </Container>
   );
 }
