@@ -44,7 +44,7 @@
   height: 100%;
   overflow-x: auto;
   overflow-y: hidden;
-  touch-action: pan-x;
+  touch-action: pan-x pan-y;
   scroll-snap-type: x mandatory;
   scrollbar-width: none;
 }
