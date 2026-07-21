@@ -165,7 +165,6 @@ export function OwnerWishlist({ wishlistId }: { wishlistId: string }) {
         onClose={formHandlers.close}
         title="Add item"
         size="lg"
-        centered
       >
         <ItemForm
           submitLabel="Create"

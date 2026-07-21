@@ -30,8 +30,8 @@ export interface WishItem {
   url: string | null;
   price: number | null;
   currency: string;
-  /** Sort key — UI labels this "Priority". */
-  position: number;
+  /** Priority: 1 (Low), 2 (Medium), 3 (High). Higher sorts first. */
+  position: 1 | 2 | 3;
   status: ItemStatus;
   /** Visible on the public list? Inactive items are owner-only. */
   isActive: boolean;
@@ -208,8 +208,8 @@ export interface ItemInput {
   url?: string | null;
   price?: number | null;
   currency?: string;
-  /** Sort key — UI labels this "Priority". */
-  position?: number;
+  /** Priority: 1 (Low), 2 (Medium), 3 (High). Defaults to 3 on the server. */
+  position?: 1 | 2 | 3;
   isActive?: boolean;
   /** Up to 3 image URLs (must already be uploaded via `uploadImage`). */
   images?: string[];
@@ -253,6 +253,29 @@ export function manageConfirmItem(id: string) {
 
 export function manageDeclineItem(id: string) {
   return request<{ item: AdminWishItem }>(`/wishlist/manage/items/${id}/decline`, { method: "POST" });
+}
+
+/* --------------------- product-URL scrape ------------------------ */
+
+/**
+ * Ask the server to fetch a product URL and pull whatever it can from OG /
+ * Twitter Card / JSON-LD. Every field is optional — the form fills in what's
+ * present and leaves the rest to the user. `imageUrl` is already mirrored
+ * into R2, so it can be dropped straight into `images[]`.
+ */
+export interface ScrapedProduct {
+  title: string | null;
+  description: string | null;
+  price: number | null;
+  currency: string | null;
+  imageUrl: string | null;
+}
+
+export function scrapeProductUrl(url: string) {
+  return request<ScrapedProduct>(`/wishlist/manage/scrape-url`, {
+    method: "POST",
+    body: JSON.stringify({ url }),
+  });
 }
 
 /* ---------------------------- images ----------------------------- */

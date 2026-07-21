@@ -217,7 +217,6 @@ export function OwnerItemActions({
         onClose={editHandlers.close}
         title="Edit item"
         size="lg"
-        centered
       >
         <ItemForm
           initial={item}

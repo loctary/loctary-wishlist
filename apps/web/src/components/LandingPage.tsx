@@ -65,7 +65,7 @@ function demoItem(input: {
     url: input.url,
     price: input.price,
     currency: "EUR",
-    position: 0,
+    position: 3,
     status: input.status,
     isActive: true,
     createdAt: "2026-01-01T00:00:00.000Z",

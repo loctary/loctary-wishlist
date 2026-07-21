@@ -1,5 +1,6 @@
 import {
   createTheme,
+  Input,
   Tooltip,
   type CSSVariablesResolver,
   type MantineColorsTuple,
@@ -68,6 +69,12 @@ export const theme = createTheme({
         withArrow: false,
         transitionProps: { transition: "pop" },
       },
+    }),
+    // Force input font-size ≥ 16px so iOS Safari/Chrome don't zoom the
+    // viewport on focus. Applies to every Input-derived component
+    // (TextInput, PasswordInput, Textarea, Select, NumberInput, …).
+    Input: Input.extend({
+      vars: () => ({ wrapper: { "--input-fz": "16px" } }),
     }),
   },
 });

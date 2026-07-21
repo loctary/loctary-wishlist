@@ -47,6 +47,7 @@ reasons (the host's `/` route no longer uses it).
 | `src/auth.ts`           | Session verification + `requireUser` / `requireAdmin` guards.     |
 | `src/routes/wishlist.ts`| All endpoints. Zod-validated, `fail()` error contract. Also exports `cleanupOrphanImages()` for the cron. |
 | `src/r2.ts`             | Cloudflare R2 via aws4fetch (S3 API). Mirrors auth's `r2.ts`; adds `listObjects()` for the nightly cleanup. |
+| `src/scrape.ts`         | Product-URL scraper — fetches HTML server-side, extracts OG / Twitter / JSON-LD Product metadata. SSRF-guarded. Consumed by `POST /manage/scrape-url`. |
 
 ## Endpoints (under `/wishlist`)
 
@@ -72,6 +73,7 @@ reasons (the host's `/` route no longer uses it).
 | POST   | `/manage/items/:id/confirm`| requireUser + own | reserved → confirmed (gift presented) |
 | POST   | `/manage/items/:id/decline`| requireUser + own | reserved → available (release) |
 | POST   | `/manage/images/upload`    | requireUser  | stage one image (WebP/JPEG/PNG, ≤300KB); shared by item images and wishlist covers. Response `{ url }`. **503 if R2 unset.** |
+| POST   | `/manage/scrape-url`       | requireUser  | `{ url }` → `{ title, description, price, currency, imageUrl }` (all nullable). Fetches the page server-side, parses OG / Twitter / JSON-LD; if it finds an image, mirrors it into R2 so `imageUrl` can be dropped straight into `images[]`. SSRF-guarded (rejects private ranges). |
 | POST   | `/admin/cleanup-orphan-images` | shared secret (`Authorization: Bearer $IMAGE_CLEANUP_SECRET`) | manual trigger for orphan-image cleanup; the Worker `scheduled()` handler runs the same job nightly. |
 
 ## Images + R2

@@ -6,6 +6,7 @@ import {
   Group,
   Input,
   NumberInput,
+  SegmentedControl,
   SimpleGrid,
   Stack,
   Switch,
@@ -14,8 +15,9 @@ import {
   TextInput,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
-import { IconPlus, IconX } from "@tabler/icons-react";
-import type { AdminWishItem, ItemInput } from "../lib/api";
+import { notifications } from "@mantine/notifications";
+import { IconBolt, IconPlus, IconWand, IconX } from "@tabler/icons-react";
+import { scrapeProductUrl, WishlistApiError, type AdminWishItem, type ItemInput } from "../lib/api";
 import { ImageCropperModal } from "./ImageCropperModal";
 
 const MAX_IMAGES = 3;
@@ -41,6 +43,7 @@ export function ItemForm({
 }) {
   const [images, setImages] = useState<string[]>(initial?.images ?? []);
   const [cropperOpen, setCropperOpen] = useState(false);
+  const [scraping, setScraping] = useState(false);
 
   const form = useForm({
     initialValues: {
@@ -49,7 +52,8 @@ export function ItemForm({
       url: initial?.url ?? "",
       price: initial?.price ?? ("" as number | ""),
       currency: initial?.currency ?? "USD",
-      priority: initial?.position ?? 0,
+      // Discrete 1 (Low) / 2 (Medium) / 3 (High); default new items to Medium.
+      priority: (initial?.position ?? 2) as 1 | 2 | 3,
       isActive: initial?.isActive ?? true,
     },
     validate: {
@@ -69,6 +73,58 @@ export function ItemForm({
       },
     },
   });
+
+  /**
+   * Ask the server to fetch the Product URL and pull whatever product metadata
+   * it can (OG / Twitter / JSON-LD). Overwrites every field the scraper
+   * returns a value for — treating Fetch as an explicit "replace with what
+   * the source page says" action — and appends the returned image (already
+   * mirrored to R2 server-side) if there's a slot free.
+   */
+  async function fetchFromLink() {
+    const url = form.values.url.trim();
+    if (!url) {
+      form.setFieldError("url", "Enter a URL first");
+      return;
+    }
+    if (form.validateField("url").hasError) return;
+
+    setScraping(true);
+    try {
+      const scraped = await scrapeProductUrl(url);
+      let filled = 0;
+      if (scraped.title) {
+        form.setFieldValue("title", scraped.title);
+        filled++;
+      }
+      if (scraped.description) {
+        form.setFieldValue("description", scraped.description);
+        filled++;
+      }
+      if (scraped.price !== null) {
+        form.setFieldValue("price", scraped.price);
+        filled++;
+        if (scraped.currency) form.setFieldValue("currency", scraped.currency);
+      }
+      if (scraped.imageUrl && images.length < MAX_IMAGES) {
+        setImages((prev) => [...prev, scraped.imageUrl!]);
+        filled++;
+      }
+      notifications.show({
+        color: filled ? "moss" : "yellow",
+        message: filled
+          ? `Filled in ${filled} field${filled === 1 ? "" : "s"} from the link.`
+          : "We couldn't find anything new on that page.",
+      });
+    } catch (e) {
+      const message =
+        e instanceof WishlistApiError ? e.message :
+        e instanceof Error ? e.message : "Could not read that page.";
+      notifications.show({ color: "red", message });
+    } finally {
+      setScraping(false);
+    }
+  }
 
   const handleSubmit = form.onSubmit((values) => {
     onSubmit({
@@ -99,14 +155,29 @@ export function ItemForm({
           minRows={2}
           {...form.getInputProps("description")}
         />
-        <TextInput
-          label="Product URL"
-          description="Optional — where the item can be bought"
-          placeholder="https://…"
-          type="url"
-          inputMode="url"
-          {...form.getInputProps("url")}
-        />
+        <Stack gap={6}>
+          <TextInput
+            label="Product URL"
+            description="Paste a link and hit Fetch to autofill the rest"
+            placeholder="https://…"
+            type="url"
+            inputMode="url"
+            {...form.getInputProps("url")}
+          />
+          <Group justify="flex-end">
+            <Button
+              type="button"
+              variant="light"
+              size="xs"
+              leftSection={<IconWand size={14} />}
+              loading={scraping}
+              onClick={fetchFromLink}
+              disabled={!form.values.url.trim()}
+            >
+              Fetch from link
+            </Button>
+          </Group>
+        </Stack>
 
         <Input.Wrapper
           label="Images"
@@ -134,11 +205,23 @@ export function ItemForm({
             {...form.getInputProps("currency")}
           />
         </Group>
-        <NumberInput
+        <Input.Wrapper
           label="Priority"
           description="Higher shows higher on your wishlist"
-          {...form.getInputProps("priority")}
-        />
+        >
+          <div>
+            <SegmentedControl
+              fullWidth
+              value={String(form.values.priority)}
+              onChange={(v) => form.setFieldValue("priority", Number(v) as 1 | 2 | 3)}
+              data={[
+                { value: "1", label: <PriorityBolts count={1} label="Low" /> },
+                { value: "2", label: <PriorityBolts count={2} label="Medium" /> },
+                { value: "3", label: <PriorityBolts count={3} label="High" /> },
+              ]}
+            />
+          </div>
+        </Input.Wrapper>
         <Switch
           label="Active"
           description="Inactive items are hidden from your public wishlist"
@@ -262,5 +345,35 @@ function ImagesGrid({
         </button>
       )}
     </SimpleGrid>
+  );
+}
+
+/** One SegmentedControl segment: 1-3 lightning icons + a readable label under them. */
+function PriorityBolts({ count, label }: { count: 1 | 2 | 3; label: string }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: 2,
+        lineHeight: 1,
+      }}
+    >
+      <span style={{ display: "inline-flex", gap: 1 }} aria-hidden>
+        {Array.from({ length: count }).map((_, i) => (
+          <IconBolt
+            key={i}
+            size={16}
+            stroke={0}
+            fill="var(--mantine-color-amber-6)"
+            style={{ color: "var(--mantine-color-amber-6)" }}
+          />
+        ))}
+      </span>
+      <Text size="xs" fw={500}>
+        {label}
+      </Text>
+    </span>
   );
 }
