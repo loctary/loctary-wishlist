@@ -114,9 +114,17 @@ nightly orphan-cleanup cron (24h grace, references BOTH `items.images` and
 The optional "Product URL" field points at the exact store page (right
 variant, correct size); when set, the item detail page renders it as an
 "View product page" external anchor (dropped in 0004, added back in 0006).
-The "Priority"/"Position" pair was merged
-into a single "Priority" field — it maps to the table's `position` column
-(the actual sort key); `priority` was dropped (migration 0003). The
+The form's **"Fetch from link"** button POSTs the URL to
+`/wishlist/manage/scrape-url` — the server pulls OG / Twitter / JSON-LD
+Product metadata off the page and returns title / description / price /
+currency / a mirrored image URL. The client only fills fields the user
+hasn't touched and only appends the image if a slot is free.
+The "Priority"/"Position" pair was merged into a single "Priority" field
+that maps to the table's `position` column (0003 dropped the old `priority`
+column). 0007 then collapsed `position` to a discrete **1 (Low) / 2 (Medium)
+/ 3 (High)** — rendered as 1/2/3 lightning bolts in the item form and
+constrained by a DB check. Existing rows were snapped to High. Item lists
+sort **active first, then priority desc, then created_at desc**. The
 `wishlist_item_images` side-table was replaced by an inline `text[]` (0004).
 
 ## Data layer

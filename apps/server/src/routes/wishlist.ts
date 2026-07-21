@@ -16,6 +16,7 @@ import {
   putObject,
   r2Configured,
 } from "../r2.js";
+import { scrapeProductPage, ssrfSafeUrl } from "../scrape.js";
 
 /**
  * Wishlist API.
@@ -294,7 +295,13 @@ const createItemSchema = z.object({
     .or(z.literal("").transform(() => null)),
   price: z.number().nonnegative("Price can't be negative").optional().nullable(),
   currency: z.string().length(3, "Use a 3-letter currency code").optional(),
-  position: z.number().int().optional(),
+  // 1 = Low, 2 = Medium, 3 = High. UI labels this "Priority".
+  position: z
+    .number()
+    .int()
+    .min(1, "Priority must be 1, 2, or 3")
+    .max(3, "Priority must be 1, 2, or 3")
+    .optional(),
   isActive: z.boolean().optional(),
   images: z.array(imageUrl).max(3, "You can attach up to 3 images").optional(),
 });
@@ -405,6 +412,8 @@ wishlist.get("/items", async (c) => {
     return fail(c, 404, "Wishlist not found");
   }
 
+  // Public listing filters to is_active=true, so the leading is_active sort
+  // is redundant here — kept implicit by the filter.
   let query = admin()
     .from("wishlist_items")
     .select(ITEM_COLUMNS)
@@ -664,11 +673,14 @@ wishlist.get("/manage/items", requireUser, async (c) => {
   const wishlistId = c.req.query("wishlist");
   if (!wishlistId) return fail(c, 400, "wishlist is required");
 
+  // Owner view — active items first (hidden ones sink to the bottom), then
+  // priority (position 1..3), then recency.
   const { data, error } = await admin()
     .from("wishlist_items")
     .select(ITEM_COLUMNS)
     .eq("owner_id", user.id)
     .eq("wishlist_id", wishlistId)
+    .order("is_active", { ascending: false })
     .order("position", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -874,6 +886,94 @@ wishlist.post("/manage/images/upload", requireUser, async (c) => {
   }
 
   return c.json({ url: publicUrl(key) }, 201);
+});
+
+/* -------------------------------------------------------------------------- */
+/* product-URL scrape                                                          */
+/*                                                                             */
+/* Given a public product URL, fetch its HTML server-side and return whatever  */
+/* OpenGraph / Twitter Card / JSON-LD (schema.org/Product) metadata exposes    */
+/* — title, description, price, currency, image. If the image URL is present   */
+/* and points at a supported format we mirror it into R2 via the existing      */
+/* pipeline so the client can drop the returned URL straight into `images[]`.  */
+/*                                                                             */
+/* We deliberately don't try to be a general-purpose scraper. If a specific    */
+/* store's misses become frequent, front this with a hosted scraper API for    */
+/* that hostname — not more regex here.                                        */
+/* -------------------------------------------------------------------------- */
+
+const SCRAPED_IMAGE_MAX_BYTES = 2 * 1024 * 1024;
+const SCRAPED_IMAGE_FETCH_TIMEOUT_MS = 8_000;
+
+const scrapeUrlSchema = z.object({
+  url: z
+    .string()
+    .trim()
+    .max(2048, "URL is too long")
+    .url("Enter a valid URL (starting with http:// or https://)"),
+});
+
+/**
+ * Fetch a product image URL and store it in R2. Returns the public R2 URL, or
+ * null if anything failed (bad content-type, too large, network error). We
+ * swallow failures rather than surface them — a scraped title without a
+ * scraped image is still useful.
+ */
+async function mirrorScrapedImage(rawUrl: string): Promise<string | null> {
+  const url = ssrfSafeUrl(rawUrl);
+  if (!url) return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SCRAPED_IMAGE_FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      redirect: "follow",
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; LoctaryBot/1.0)" },
+    });
+    if (!res.ok) return null;
+
+    const contentType = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+    const ext = IMAGE_EXT[contentType];
+    if (!ext) return null;
+
+    const buf = await res.arrayBuffer();
+    if (buf.byteLength === 0 || buf.byteLength > SCRAPED_IMAGE_MAX_BYTES) return null;
+
+    const key = `wishlist/${crypto.randomUUID()}.${ext}`;
+    await putObject(key, buf, contentType);
+    return publicUrl(key);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+wishlist.post("/manage/scrape-url", requireUser, async (c) => {
+  const parsed = await parseBody(c, scrapeUrlSchema);
+  if (!parsed.ok) return fail(c, 400, parsed.error, parsed.fields);
+  if (!ssrfSafeUrl(parsed.data.url)) return fail(c, 400, "Enter a public http(s) URL.");
+
+  const scraped = await scrapeProductPage(parsed.data.url);
+  if (scraped.blocked) {
+    // The site refused our request (403 / non-HTML / timeout). Bigger e-com
+    // sites do TLS/JS fingerprinting we can't beat without a hosted scraper —
+    // tell the caller so the UI can suggest filling by hand.
+    return fail(c, 502, "That site blocked our request — please fill in the details by hand.");
+  }
+
+  // Mirror the image only if the caller can actually attach it (R2 configured).
+  const imageUrl =
+    scraped.imageUrl && r2Configured() ? await mirrorScrapedImage(scraped.imageUrl) : null;
+
+  return c.json({
+    title: scraped.title,
+    description: scraped.description,
+    price: scraped.price,
+    currency: scraped.currency,
+    imageUrl,
+  });
 });
 
 /* -------------------------------------------------------------------------- */
