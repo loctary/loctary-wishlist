@@ -275,7 +275,13 @@ const createListSchema = z.object({
   description: z.string().max(2000).optional().nullable(),
   coverImageUrl: imageUrl.optional().nullable(),
   isActive: z.boolean().optional(),
-  position: z.number().int().optional(),
+  // 1 = Low, 2 = Medium, 3 = High. UI labels this "Priority".
+  position: z
+    .number()
+    .int()
+    .min(1, "Priority must be 1, 2, or 3")
+    .max(3, "Priority must be 1, 2, or 3")
+    .optional(),
 });
 const editListSchema = createListSchema.partial().refine((o) => Object.keys(o).length > 0, {
   message: "Nothing to update",
@@ -559,10 +565,12 @@ wishlist.delete("/items/:id/reserve", requireUser, async (c) => {
 /** GET /manage/wishlists → all of the caller's lists, active + inactive. */
 wishlist.get("/manage/wishlists", requireUser, async (c) => {
   const user = c.get("user")!;
+  // Owner view: active lists first, then priority (position 1..3), then recency.
   const { data, error } = await admin()
     .from("wishlists")
     .select(LIST_COLUMNS)
     .eq("owner_id", user.id)
+    .order("is_active", { ascending: false })
     .order("position", { ascending: false })
     .order("created_at", { ascending: false });
 

@@ -6,7 +6,6 @@ import {
   Group,
   Input,
   NumberInput,
-  SegmentedControl,
   SimpleGrid,
   Stack,
   Switch,
@@ -16,17 +15,23 @@ import {
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
-import { IconBolt, IconPlus, IconWand, IconX } from "@tabler/icons-react";
+import { IconPlus, IconWand, IconX } from "@tabler/icons-react";
 import { scrapeProductUrl, WishlistApiError, type AdminWishItem, type ItemInput } from "../lib/api";
 import { ImageCropperModal } from "./ImageCropperModal";
+import { PriorityPicker, type Priority } from "./PriorityPicker";
 
 const MAX_IMAGES = 3;
 
 /**
- * Create/edit form for a wishlist item. Images live in local `images` state:
- * the cropper modal uploads each one to R2 and we append its URL here, so the
- * submit payload is the full ordered list. Trimming inputs / dropping empty
- * strings happens in `handleSubmit`.
+ * Create/edit form for a wishlist item. Renders as a flex column so it can
+ * fill the parent Modal.Body: field stack (top) scrolls independently while
+ * the action row (bottom) stays pinned. The parent Modal must give
+ * `Modal.Body` `display:flex; flex-direction:column; min-height:0; overflow:hidden`
+ * so this form has a bounded height to work with.
+ *
+ * Images live in local `images` state: the cropper modal uploads each one to
+ * R2 and we append its URL here, so the submit payload is the full ordered
+ * list. Trimming inputs / dropping empty strings happens in `handleSubmit`.
  */
 export function ItemForm({
   initial,
@@ -53,7 +58,7 @@ export function ItemForm({
       price: initial?.price ?? ("" as number | ""),
       currency: initial?.currency ?? "USD",
       // Discrete 1 (Low) / 2 (Medium) / 3 (High); default new items to Medium.
-      priority: (initial?.position ?? 2) as 1 | 2 | 3,
+      priority: (initial?.position ?? 2) as Priority,
       isActive: initial?.isActive ?? true,
     },
     validate: {
@@ -142,102 +147,116 @@ export function ItemForm({
   });
 
   return (
-    <form onSubmit={handleSubmit}>
-      <Stack>
-        <TextInput
-          label="Title"
-          withAsterisk
-          {...form.getInputProps("title")}
-        />
-        <Textarea
-          label="Description"
-          autosize
-          minRows={2}
-          {...form.getInputProps("description")}
-        />
-        <Stack gap={6}>
+    <form
+      onSubmit={handleSubmit}
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        flex: "1 1 auto",
+        minHeight: 0,
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          overflowY: "auto",
+          flex: "1 1 auto",
+          minHeight: 0,
+          padding: "var(--mantine-spacing-md)",
+        }}
+      >
+        <Stack>
           <TextInput
-            label="Product URL"
-            description="Paste a link and hit Fetch to autofill the rest"
-            placeholder="https://…"
-            type="url"
-            inputMode="url"
-            {...form.getInputProps("url")}
+            label="Title"
+            withAsterisk
+            {...form.getInputProps("title")}
           />
-          <Group justify="flex-end">
-            <Button
-              type="button"
-              variant="light"
-              size="xs"
-              leftSection={<IconWand size={14} />}
-              loading={scraping}
-              onClick={fetchFromLink}
-              disabled={!form.values.url.trim()}
-            >
-              Fetch from link
-            </Button>
-          </Group>
-        </Stack>
-
-        <Input.Wrapper
-          label="Images"
-          description={`Up to ${MAX_IMAGES} photos at 4:3 (≤300KB each). The first is the cover.`}
-        >
-          <ImagesGrid
-            images={images}
-            onRemove={(idx) =>
-              setImages((prev) => prev.filter((_, i) => i !== idx))
-            }
-            onAdd={() => setCropperOpen(true)}
+          <Textarea
+            label="Description"
+            autosize
+            minRows={2}
+            {...form.getInputProps("description")}
           />
-        </Input.Wrapper>
-
-        <Group grow>
-          <NumberInput
-            label="Price"
-            min={0}
-            decimalScale={2}
-            {...form.getInputProps("price")}
-          />
-          <TextInput
-            label="Currency"
-            maxLength={3}
-            {...form.getInputProps("currency")}
-          />
-        </Group>
-        <Input.Wrapper
-          label="Priority"
-          description="Higher shows higher on your wishlist"
-        >
-          <div>
-            <SegmentedControl
-              fullWidth
-              value={String(form.values.priority)}
-              onChange={(v) => form.setFieldValue("priority", Number(v) as 1 | 2 | 3)}
-              data={[
-                { value: "1", label: <PriorityBolts count={1} label="Low" /> },
-                { value: "2", label: <PriorityBolts count={2} label="Medium" /> },
-                { value: "3", label: <PriorityBolts count={3} label="High" /> },
-              ]}
+          <Stack gap={6}>
+            <TextInput
+              label="Product URL"
+              description="Paste a link and hit Fetch to autofill the rest"
+              placeholder="https://…"
+              type="url"
+              inputMode="url"
+              {...form.getInputProps("url")}
             />
-          </div>
-        </Input.Wrapper>
-        <Switch
-          label="Active"
-          description="Inactive items are hidden from your public wishlist"
-          {...form.getInputProps("isActive", { type: "checkbox" })}
-        />
-        <Group justify="flex-end" mt="sm">
-          {onCancel && (
-            <Button variant="default" onClick={onCancel} type="button">
-              Cancel
-            </Button>
-          )}
-          <Button type="submit" loading={submitting}>
-            {submitLabel}
+            <Group justify="flex-end">
+              <Button
+                type="button"
+                variant="light"
+                size="xs"
+                leftSection={<IconWand size={14} />}
+                loading={scraping}
+                onClick={fetchFromLink}
+                disabled={!form.values.url.trim()}
+              >
+                Fetch from link
+              </Button>
+            </Group>
+          </Stack>
+
+          <Input.Wrapper
+            label="Images"
+            description={`Up to ${MAX_IMAGES} photos at 4:3 (≤300KB each). The first is the cover.`}
+          >
+            <ImagesGrid
+              images={images}
+              onRemove={(idx) =>
+                setImages((prev) => prev.filter((_, i) => i !== idx))
+              }
+              onAdd={() => setCropperOpen(true)}
+            />
+          </Input.Wrapper>
+
+          <Group grow>
+            <NumberInput
+              label="Price"
+              min={0}
+              decimalScale={2}
+              {...form.getInputProps("price")}
+            />
+            <TextInput
+              label="Currency"
+              maxLength={3}
+              {...form.getInputProps("currency")}
+            />
+          </Group>
+          <PriorityPicker
+            value={form.values.priority}
+            onChange={(p) => form.setFieldValue("priority", p)}
+            description="Higher shows higher on your wishlist"
+          />
+          <Switch
+            label="Active"
+            description="Inactive items are hidden from your public wishlist"
+            {...form.getInputProps("isActive", { type: "checkbox" })}
+          />
+        </Stack>
+      </div>
+
+      <Group
+        justify="flex-end"
+        style={{
+          padding: "var(--mantine-spacing-sm) var(--mantine-spacing-md)",
+          borderTop: "1px solid var(--mantine-color-default-border)",
+          flexShrink: 0,
+        }}
+      >
+        {onCancel && (
+          <Button variant="default" onClick={onCancel} type="button">
+            Cancel
           </Button>
-        </Group>
-      </Stack>
+        )}
+        <Button type="submit" loading={submitting}>
+          {submitLabel}
+        </Button>
+      </Group>
 
       <ImageCropperModal
         opened={cropperOpen}
@@ -345,35 +364,5 @@ function ImagesGrid({
         </button>
       )}
     </SimpleGrid>
-  );
-}
-
-/** One SegmentedControl segment: 1-3 lightning icons + a readable label under them. */
-function PriorityBolts({ count, label }: { count: 1 | 2 | 3; label: string }) {
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 2,
-        lineHeight: 1,
-      }}
-    >
-      <span style={{ display: "inline-flex", gap: 1 }} aria-hidden>
-        {Array.from({ length: count }).map((_, i) => (
-          <IconBolt
-            key={i}
-            size={16}
-            stroke={0}
-            fill="var(--mantine-color-amber-6)"
-            style={{ color: "var(--mantine-color-amber-6)" }}
-          />
-        ))}
-      </span>
-      <Text size="xs" fw={500}>
-        {label}
-      </Text>
-    </span>
   );
 }

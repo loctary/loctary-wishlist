@@ -63,7 +63,8 @@ export interface Wishlist {
   title: string;
   description: string | null;
   coverImageUrl: string | null;
-  position: number;
+  /** Priority: 1 (Low), 2 (Medium), 3 (High). Higher sorts first. */
+  position: 1 | 2 | 3;
   createdAt: string;
   /** Number of ACTIVE items on this list (what visitors will see). */
   itemsCount: number;
@@ -82,7 +83,8 @@ export interface WishlistInput {
   description?: string | null;
   coverImageUrl?: string | null;
   isActive?: boolean;
-  position?: number;
+  /** Priority: 1 (Low), 2 (Medium), 3 (High). Defaults to 3 on the server. */
+  position?: 1 | 2 | 3;
 }
 
 /* --- errors --------------------------------------------------------------- */

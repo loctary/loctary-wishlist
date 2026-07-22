@@ -160,19 +160,37 @@ export function OwnerWishlist({ wishlistId }: { wishlistId: string }) {
         </SimpleGrid>
       )}
 
-      <Modal
+      <Modal.Root
         opened={formOpen}
         onClose={formHandlers.close}
-        title="Add item"
         size="lg"
+        centered
       >
-        <ItemForm
-          submitLabel="Create"
-          submitting={createMut.isPending}
-          onCancel={formHandlers.close}
-          onSubmit={(input) => createMut.mutate(input)}
-        />
-      </Modal>
+        <Modal.Overlay />
+        <Modal.Content>
+          <Modal.Header>
+            <Modal.Title>Add item</Modal.Title>
+            <Modal.CloseButton />
+          </Modal.Header>
+          <Modal.Body
+            p={0}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              flex: "1 1 auto",
+              minHeight: 0,
+              overflow: "hidden",
+            }}
+          >
+            <ItemForm
+              submitLabel="Create"
+              submitting={createMut.isPending}
+              onCancel={formHandlers.close}
+              onSubmit={(input) => createMut.mutate(input)}
+            />
+          </Modal.Body>
+        </Modal.Content>
+      </Modal.Root>
     </Container>
   );
 }
