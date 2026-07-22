@@ -212,20 +212,38 @@ export function OwnerItemActions({
         </Tooltip>
       </Group>
 
-      <Modal
+      <Modal.Root
         opened={editOpen}
         onClose={editHandlers.close}
-        title="Edit item"
         size="lg"
+        centered
       >
-        <ItemForm
-          initial={item}
-          submitLabel="Save changes"
-          submitting={updateMut.isPending}
-          onCancel={editHandlers.close}
-          onSubmit={(input) => updateMut.mutate(input)}
-        />
-      </Modal>
+        <Modal.Overlay />
+        <Modal.Content>
+          <Modal.Header>
+            <Modal.Title>Edit item</Modal.Title>
+            <Modal.CloseButton />
+          </Modal.Header>
+          <Modal.Body
+            p={0}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              flex: "1 1 auto",
+              minHeight: 0,
+              overflow: "hidden",
+            }}
+          >
+            <ItemForm
+              initial={item}
+              submitLabel="Save changes"
+              submitting={updateMut.isPending}
+              onCancel={editHandlers.close}
+              onSubmit={(input) => updateMut.mutate(input)}
+            />
+          </Modal.Body>
+        </Modal.Content>
+      </Modal.Root>
 
       <Modal
         opened={deleteOpen}

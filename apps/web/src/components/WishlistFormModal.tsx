@@ -6,7 +6,6 @@ import {
   Group,
   Input,
   Modal,
-  NumberInput,
   Stack,
   Switch,
   Text,
@@ -17,6 +16,7 @@ import { useForm } from "@mantine/form";
 import { IconPhoto, IconPlus, IconX } from "@tabler/icons-react";
 import type { AdminWishlist, WishlistInput } from "../lib/api";
 import { ImageCropperModal } from "./ImageCropperModal";
+import { PriorityPicker, type Priority } from "./PriorityPicker";
 
 /**
  * Create/edit form for a wishlist. Cover image is picked → cropped → uploaded
@@ -47,7 +47,8 @@ export function WishlistFormModal({
       title: initial?.title ?? "",
       description: initial?.description ?? "",
       isActive: initial?.isActive ?? true,
-      position: initial?.position ?? 0,
+      // Discrete 1 (Low) / 2 (Medium) / 3 (High); default new lists to Medium.
+      priority: (initial?.position ?? 2) as Priority,
     },
     validate: {
       title: (v) => (v.trim().length === 0 ? "Title is required" : null),
@@ -60,69 +61,104 @@ export function WishlistFormModal({
       description: values.description.trim() || null,
       coverImageUrl: cover ?? null,
       isActive: values.isActive,
-      position: values.position,
+      position: values.priority,
     });
   });
 
   return (
-    <Modal
-      opened={opened}
-      onClose={onClose}
-      title={initial ? "Edit wishlist" : "New wishlist"}
-      size="lg"
-      centered
-    >
-      <form onSubmit={handleSubmit}>
-        <Stack>
-          <TextInput label="Title" withAsterisk {...form.getInputProps("title")} />
-          <Textarea
-            label="Description"
-            autosize
-            minRows={2}
-            {...form.getInputProps("description")}
-          />
-
-          <Input.Wrapper
-            label="Cover image"
-            description="Optional — 4:3, ≤300KB. Shown on the list's tile and page."
+    <Modal.Root opened={opened} onClose={onClose} size="lg" centered>
+      <Modal.Overlay />
+      <Modal.Content>
+        <Modal.Header>
+          <Modal.Title>{initial ? "Edit wishlist" : "New wishlist"}</Modal.Title>
+          <Modal.CloseButton />
+        </Modal.Header>
+        <Modal.Body
+          p={0}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            flex: "1 1 auto",
+            minHeight: 0,
+            overflow: "hidden",
+          }}
+        >
+          <form
+            onSubmit={handleSubmit}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              flex: "1 1 auto",
+              minHeight: 0,
+              overflow: "hidden",
+            }}
           >
-            <CoverPicker
-              url={cover}
-              onPick={() => setCropperOpen(true)}
-              onClear={() => setCover(null)}
-            />
-          </Input.Wrapper>
+            <div
+              style={{
+                overflowY: "auto",
+                flex: "1 1 auto",
+                minHeight: 0,
+                padding: "var(--mantine-spacing-md)",
+              }}
+            >
+              <Stack>
+                <TextInput label="Title" withAsterisk {...form.getInputProps("title")} />
+                <Textarea
+                  label="Description"
+                  autosize
+                  minRows={2}
+                  {...form.getInputProps("description")}
+                />
 
-          <Group grow>
-            <NumberInput
-              label="Priority"
-              description="Higher shows higher in your list index"
-              {...form.getInputProps("position")}
-            />
-          </Group>
-          <Switch
-            label="Active"
-            description="Inactive wishlists (and everything on them) are hidden from the public"
-            {...form.getInputProps("isActive", { type: "checkbox" })}
+                <Input.Wrapper
+                  label="Cover image"
+                  description="Optional — 4:3, ≤300KB. Shown on the list's tile and page."
+                >
+                  <CoverPicker
+                    url={cover}
+                    onPick={() => setCropperOpen(true)}
+                    onClear={() => setCover(null)}
+                  />
+                </Input.Wrapper>
+
+                <PriorityPicker
+                  value={form.values.priority}
+                  onChange={(p) => form.setFieldValue("priority", p)}
+                  description="Higher shows higher in your list index"
+                />
+                <Switch
+                  label="Active"
+                  description="Inactive wishlists (and everything on them) are hidden from the public"
+                  {...form.getInputProps("isActive", { type: "checkbox" })}
+                />
+              </Stack>
+            </div>
+
+            <Group
+              justify="flex-end"
+              style={{
+                padding: "var(--mantine-spacing-sm) var(--mantine-spacing-md)",
+                borderTop: "1px solid var(--mantine-color-default-border)",
+                flexShrink: 0,
+              }}
+            >
+              <Button variant="default" type="button" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" loading={submitting}>
+                {submitLabel}
+              </Button>
+            </Group>
+          </form>
+
+          <ImageCropperModal
+            opened={cropperOpen}
+            onClose={() => setCropperOpen(false)}
+            onUploaded={(url) => setCover(url)}
           />
-
-          <Group justify="flex-end" mt="sm">
-            <Button variant="default" type="button" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button type="submit" loading={submitting}>
-              {submitLabel}
-            </Button>
-          </Group>
-        </Stack>
-      </form>
-
-      <ImageCropperModal
-        opened={cropperOpen}
-        onClose={() => setCropperOpen(false)}
-        onUploaded={(url) => setCover(url)}
-      />
-    </Modal>
+        </Modal.Body>
+      </Modal.Content>
+    </Modal.Root>
   );
 }
 

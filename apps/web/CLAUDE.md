@@ -124,7 +124,10 @@ that maps to the table's `position` column (0003 dropped the old `priority`
 column). 0007 then collapsed `position` to a discrete **1 (Low) / 2 (Medium)
 / 3 (High)** — rendered as 1/2/3 lightning bolts in the item form and
 constrained by a DB check. Existing rows were snapped to High. Item lists
-sort **active first, then priority desc, then created_at desc**. The
+sort **active first, then priority desc, then created_at desc**. 0008
+extends the same collapse to `wishlists.position` — the wishlist form uses
+the same `PriorityPicker` component (`src/components/PriorityPicker.tsx`)
+and manage/wishlists sorts active-first too. The
 `wishlist_item_images` side-table was replaced by an inline `text[]` (0004).
 
 ## Data layer
