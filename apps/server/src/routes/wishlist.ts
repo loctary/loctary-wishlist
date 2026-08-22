@@ -993,6 +993,11 @@ wishlist.post("/manage/scrape-url", requireUser, async (c) => {
 /* -------------------------------------------------------------------------- */
 
 const ORPHAN_GRACE_MS = 24 * 60 * 60 * 1000;
+const STATIC_WISHLIST_IMAGE_KEYS = new Set([
+  "wishlist/landing_1.png",
+  "wishlist/landing_2.png",
+  "wishlist/landing_3.jpg",
+]);
 
 export async function cleanupOrphanImages(): Promise<{
   scanned: number;
@@ -1023,7 +1028,7 @@ export async function cleanupOrphanImages(): Promise<{
   let deleted = 0;
   let skipped = 0;
   for (const obj of objects) {
-    if (referenced.has(obj.key)) continue;
+    if (referenced.has(obj.key) || STATIC_WISHLIST_IMAGE_KEYS.has(obj.key)) continue;
     const age = Date.parse(obj.lastModified);
     if (Number.isFinite(age) && age > cutoff) {
       skipped++;

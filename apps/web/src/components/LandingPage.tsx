@@ -47,6 +47,8 @@ import { WishlistCard } from "./WishlistCard";
  */
 type DemoItem = WishItem & { mine: boolean };
 
+const LANDING_IMAGE_BASE = "https://images.loctary.com/wishlist";
+
 function demoItem(input: {
   id: string;
   title: string;
@@ -82,7 +84,7 @@ const HERO_ITEMS: DemoItem[] = [
     description: "Active noise-cancelling earbuds — the everyday pair.",
     price: 249,
     url: "https://www.apple.com/ua/airpods-pro/",
-    images: ["https://images.loctary.com/wishlist/c2e238a6-2be9-42cc-806d-9c569637128e.webp"],
+    images: [`${LANDING_IMAGE_BASE}/landing_1.png`],
     status: "available",
   }),
   demoItem({
@@ -91,7 +93,7 @@ const HERO_ITEMS: DemoItem[] = [
     description: "A vintage 35mm rangefinder for slow, considered photos.",
     price: 250,
     url: "https://ohsocult.com/products/olympus-35-dc-rangefinder-vintage-35mm-film-camera",
-    images: ["https://images.loctary.com/wishlist/67683b86-f19d-49b7-bc6b-c28f02b61b4e.webp"],
+    images: [`${LANDING_IMAGE_BASE}/landing_2.png`],
     status: "reserved",
   }),
   demoItem({
@@ -100,7 +102,7 @@ const HERO_ITEMS: DemoItem[] = [
     description: "A stainless-steel Game of Thrones mug — for the coldest mornings.",
     price: 25,
     url: "https://www.amazon.de/-/en/Nemesis-Now-Thrones-Stainless-B3697J7/dp/B075GS9YS8",
-    images: ["https://images.loctary.com/wishlist/b39e1721-a407-4c37-9da5-9dadad7f9f86.webp"],
+    images: [`${LANDING_IMAGE_BASE}/landing_3.jpg`],
     status: "available",
   }),
 ];
