@@ -21,6 +21,18 @@ import { ImageCropperModal } from "./ImageCropperModal";
 import { PriorityPicker, type Priority } from "./PriorityPicker";
 
 const MAX_IMAGES = 3;
+const TITLE_MAX_LENGTH = 200;
+const DESCRIPTION_MAX_LENGTH = 2000;
+const URL_MAX_LENGTH = 2048;
+const CURRENCY_LENGTH = 3;
+
+function clipText(value: string, maxLength: number): string {
+  return value.length > maxLength ? value.slice(0, maxLength) : value;
+}
+
+function clipCurrency(value: string): string {
+  return clipText(value.trim().toUpperCase(), CURRENCY_LENGTH);
+}
 
 /**
  * Create/edit form for a wishlist item. Renders as a flex column so it can
@@ -99,17 +111,20 @@ export function ItemForm({
       const scraped = await scrapeProductUrl(url);
       let filled = 0;
       if (scraped.title) {
-        form.setFieldValue("title", scraped.title);
+        form.setFieldValue("title", clipText(scraped.title.trim(), TITLE_MAX_LENGTH));
         filled++;
       }
       if (scraped.description) {
-        form.setFieldValue("description", scraped.description);
+        form.setFieldValue("description", clipText(scraped.description.trim(), DESCRIPTION_MAX_LENGTH));
         filled++;
       }
       if (scraped.price !== null) {
         form.setFieldValue("price", scraped.price);
         filled++;
-        if (scraped.currency) form.setFieldValue("currency", scraped.currency);
+        if (scraped.currency) {
+          const currency = clipCurrency(scraped.currency);
+          if (currency.length === CURRENCY_LENGTH) form.setFieldValue("currency", currency);
+        }
       }
       if (scraped.imageUrl && images.length < MAX_IMAGES) {
         setImages((prev) => [...prev, scraped.imageUrl!]);
@@ -169,12 +184,14 @@ export function ItemForm({
           <TextInput
             label="Title"
             withAsterisk
+            maxLength={TITLE_MAX_LENGTH}
             {...form.getInputProps("title")}
           />
           <Textarea
             label="Description"
             autosize
             minRows={2}
+            maxLength={DESCRIPTION_MAX_LENGTH}
             {...form.getInputProps("description")}
           />
           <Stack gap={6}>
@@ -184,6 +201,7 @@ export function ItemForm({
               placeholder="https://…"
               type="url"
               inputMode="url"
+              maxLength={URL_MAX_LENGTH}
               {...form.getInputProps("url")}
             />
             <Group justify="flex-end">
@@ -223,7 +241,7 @@ export function ItemForm({
             />
             <TextInput
               label="Currency"
-              maxLength={3}
+              maxLength={CURRENCY_LENGTH}
               {...form.getInputProps("currency")}
             />
           </Group>
